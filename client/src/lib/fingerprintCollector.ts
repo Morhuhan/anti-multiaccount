@@ -6,7 +6,6 @@ import type {
   EventType,
   FingerprintCollectionResult,
   FingerprintContextPayload,
-  FingerprintEventDto,
   FingerprintPayload,
 } from '../types'
 
