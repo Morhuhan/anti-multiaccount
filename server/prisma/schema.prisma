@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum FingerprintEventType {
+  register
+  login
+  promo_activation
+}
+
+model User {
+  id           Int               @id @default(autoincrement())
+  email        String            @unique @db.VarChar(255)
+  name         String?           @db.VarChar(255)
+  createdAt    DateTime          @default(now())
+  authAccounts UserAuthAccount[]
+  fingerprints UserFingerprint[]
+}
+
+model UserAuthAccount {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  provider          String   @db.VarChar(64)
+  providerAccountId String   @db.VarChar(255)
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([provider, providerAccountId])
+}
+
+model UserFingerprint {
+  id                  Int                  @id @default(autoincrement())
+  userId              Int
+  eventType           FingerprintEventType
+  fHash               String?              @db.VarChar(255)
+  ipPrimary           String?              @db.VarChar(64)
+  ipWebrtc            String?              @db.VarChar(64)
+  canvasId            String?              @db.VarChar(255)
+  audioId             String?              @db.VarChar(255)
+  webglVendor         String?              @db.VarChar(255)
+  webglRenderer       String?              @db.VarChar(255)
+  webglId             String?              @db.VarChar(255)
+  cookieId            String?              @db.VarChar(255)
+  affiliateId         String?              @db.VarChar(255)
+  registrationSpeedMs Int?
+  payload             Json
+  createdAt           DateTime             @default(now())
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([fHash])
+  @@index([cookieId])
+  @@index([ipPrimary])
+  @@index([ipWebrtc])
+  @@index([createdAt])
+  @@index([canvasId, audioId, webglId])
+  @@index([ipPrimary, ipWebrtc])
+  @@index([ipPrimary, affiliateId])
+}

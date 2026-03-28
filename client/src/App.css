@@ -1,0 +1,89 @@
+.app {
+  padding: 16px;
+}
+
+.subtitle {
+  margin-bottom: 16px;
+}
+
+.block {
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid #cfcfcf;
+  background: #fff;
+}
+
+.forms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form {
+  display: grid;
+  gap: 8px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+input,
+button {
+  min-height: 36px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+button,
+tr.selected,
+tbody tr {
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+th,
+td {
+  border: 1px solid #cfcfcf;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+tr.selected {
+  background: #efefef;
+}
+
+.error {
+  color: #b00020;
+}
+
+.debug-box {
+  margin: 8px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid #cfcfcf;
+  background: #f7f7f7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .forms {
+    grid-template-columns: 1fr;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
