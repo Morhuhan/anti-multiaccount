@@ -33,11 +33,11 @@ function createFingerprintEvent(overrides = {}) {
 
 async function request(path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers ?? {}),
     },
-    ...options,
   })
 
   const text = await response.text()
