@@ -229,12 +229,20 @@ async function collectWebrtcIp(): Promise<SignalResult> {
       }
     }
 
-    const connection = new RTCPeerConnection({ iceServers: [] })
-    pushDebug('RTCPeerConnection created with empty iceServers')
+    const connection = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:stun.l.google.com:19302' },
+      ],
+    })
+    pushDebug('RTCPeerConnection created with STUN servers')
     connection.createDataChannel('anti-multiaccount')
     pushDebug('Data channel created')
 
     const foundIp = await new Promise<SignalResult>((resolve) => {
+      let lastDiagnostic =
+        'WebRTC IP не получен: браузер не вернул пригодный адрес'
+
       const timeoutId = window.setTimeout(
         () => {
           pushDebug('Timed out waiting for ICE candidate')
@@ -243,7 +251,7 @@ async function collectWebrtcIp(): Promise<SignalResult> {
             debug: [...debug],
           })
         },
-        1200,
+        2500,
       )
 
       connection.onicegatheringstatechange = () => {
@@ -263,11 +271,24 @@ async function collectWebrtcIp(): Promise<SignalResult> {
         )
         const parsedIp = extractIpFromIceCandidate(candidate, pushDebug)
 
-        if (parsedIp) {
+        if (parsedIp?.diagnostic) {
+          lastDiagnostic = parsedIp.diagnostic
+        }
+
+        if (parsedIp?.value) {
           window.clearTimeout(timeoutId)
           resolve({
             value: parsedIp.value,
             diagnostic: parsedIp.diagnostic,
+            debug: [...debug],
+          })
+        }
+
+        if (!candidate) {
+          window.clearTimeout(timeoutId)
+          pushDebug(`ICE gathering completed without IP, final diagnostic: ${lastDiagnostic}`)
+          resolve({
+            diagnostic: lastDiagnostic,
             debug: [...debug],
           })
         }
