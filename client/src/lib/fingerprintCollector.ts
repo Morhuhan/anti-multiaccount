@@ -232,15 +232,13 @@ async function collectWebrtcIp(): Promise<SignalResult> {
 
       connection.onicecandidate = (event) => {
         const candidate = event.candidate?.candidate
-        const match = candidate?.match(
-          /([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-f0-9:]+:[a-f0-9:]+)/i,
-        )
+        const parsedIp = extractIpFromIceCandidate(candidate)
 
-        if (match?.[1]) {
+        if (parsedIp) {
           window.clearTimeout(timeoutId)
           resolve({
-            value: match[1],
-            diagnostic: `WebRTC IP найден: ${match[1]}`,
+            value: parsedIp,
+            diagnostic: `WebRTC IP найден: ${parsedIp}`,
           })
         }
       }
@@ -263,6 +261,58 @@ async function collectWebrtcIp(): Promise<SignalResult> {
       diagnostic: `Ошибка WebRTC: ${getErrorMessage(error)}`,
     }
   }
+}
+
+function extractIpFromIceCandidate(candidate: string | undefined): string | undefined {
+  if (!candidate) {
+    return undefined
+  }
+
+  const parts = candidate.trim().split(/\s+/)
+  const candidateAddress = parts[4]
+
+  if (isValidIpv4(candidateAddress) || isValidIpv6(candidateAddress)) {
+    return candidateAddress
+  }
+
+  const fallbackMatch = candidate.match(
+    /\b(?:\d{1,3}\.){3}\d{1,3}\b|(?:(?:[a-fA-F0-9]{1,4}:){2,}[a-fA-F0-9]{1,4})/g,
+  )
+
+  if (!fallbackMatch) {
+    return undefined
+  }
+
+  return fallbackMatch.find((entry) => isValidIpv4(entry) || isValidIpv6(entry))
+}
+
+function isValidIpv4(value: string | undefined): boolean {
+  if (!value) {
+    return false
+  }
+
+  const parts = value.split('.')
+
+  if (parts.length !== 4) {
+    return false
+  }
+
+  return parts.every((part) => {
+    if (!/^\d+$/.test(part)) {
+      return false
+    }
+
+    const parsed = Number.parseInt(part, 10)
+    return parsed >= 0 && parsed <= 255
+  })
+}
+
+function isValidIpv6(value: string | undefined): boolean {
+  if (!value) {
+    return false
+  }
+
+  return /^[a-fA-F0-9:]+$/.test(value) && value.includes(':')
 }
 
 function collectScreenResolution(): string | undefined {
