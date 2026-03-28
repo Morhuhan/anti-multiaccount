@@ -44,6 +44,9 @@ export type FingerprintCollectionMeta = {
     audio: string
     webrtc: string
   }
+  debug?: {
+    webrtc: string[]
+  }
 }
 
 export type FingerprintCollectionResult = {

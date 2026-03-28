@@ -22,6 +22,7 @@ type CollectorOptions = {
 type SignalResult = {
   value?: string
   diagnostic: string
+  debug?: string[]
 }
 
 type BatteryManagerLike = {
@@ -212,52 +213,98 @@ async function collectBatteryStatus(): Promise<
 
 async function collectWebrtcIp(): Promise<SignalResult> {
   try {
+    const debug: string[] = []
+    const pushDebug = (message: string) => {
+      const entry = `[${new Date().toISOString()}] ${message}`
+      debug.push(entry)
+      console.debug('[webrtc-debug]', entry)
+    }
+
+    pushDebug('collectWebrtcIp started')
     if (typeof RTCPeerConnection === 'undefined') {
+      pushDebug('RTCPeerConnection is not available')
       return {
         diagnostic: 'RTCPeerConnection недоступен',
+        debug,
       }
     }
 
     const connection = new RTCPeerConnection({ iceServers: [] })
+    pushDebug('RTCPeerConnection created with empty iceServers')
     connection.createDataChannel('anti-multiaccount')
+    pushDebug('Data channel created')
 
     const foundIp = await new Promise<SignalResult>((resolve) => {
       const timeoutId = window.setTimeout(
-        () =>
+        () => {
+          pushDebug('Timed out waiting for ICE candidate')
           resolve({
             diagnostic: 'WebRTC: таймаут ожидания ICE candidate',
-          }),
+            debug: [...debug],
+          })
+        },
         1200,
       )
 
+      connection.onicegatheringstatechange = () => {
+        pushDebug(`iceGatheringState=${connection.iceGatheringState}`)
+      }
+
+      connection.oniceconnectionstatechange = () => {
+        pushDebug(`iceConnectionState=${connection.iceConnectionState}`)
+      }
+
       connection.onicecandidate = (event) => {
         const candidate = event.candidate?.candidate
-        const parsedIp = extractIpFromIceCandidate(candidate)
+        pushDebug(
+          candidate
+            ? `ICE candidate received: ${candidate}`
+            : 'ICE candidate event without candidate payload',
+        )
+        const parsedIp = extractIpFromIceCandidate(candidate, pushDebug)
 
         if (parsedIp) {
           window.clearTimeout(timeoutId)
           resolve({
             value: parsedIp.value,
             diagnostic: parsedIp.diagnostic,
+            debug: [...debug],
           })
         }
       }
 
       void connection
         .createOffer()
-        .then((offer) => connection.setLocalDescription(offer))
+        .then((offer) => {
+          pushDebug(`Offer created, SDP length=${offer.sdp?.length ?? 0}`)
+          return connection.setLocalDescription(offer)
+        })
+        .then(() => {
+          pushDebug('Local description set successfully')
+        })
         .catch((error) => {
           window.clearTimeout(timeoutId)
+          pushDebug(`createOffer/setLocalDescription failed: ${getErrorMessage(error)}`)
           resolve({
+            debug: [...debug],
             diagnostic: `Ошибка createOffer/setLocalDescription: ${getErrorMessage(error)}`,
           })
         })
     })
 
+    pushDebug(
+      foundIp.value
+        ? `Resolved WebRTC IP: ${foundIp.value}`
+        : `Finished without IP: ${foundIp.diagnostic}`,
+    )
     connection.close()
+    pushDebug('RTCPeerConnection closed')
     return foundIp
   } catch (error) {
+    const message = getErrorMessage(error)
+    console.debug('[webrtc-debug]', `fatal error: ${message}`)
     return {
+      debug: [`[${new Date().toISOString()}] fatal error: ${message}`],
       diagnostic: `Ошибка WebRTC: ${getErrorMessage(error)}`,
     }
   }
@@ -265,15 +312,19 @@ async function collectWebrtcIp(): Promise<SignalResult> {
 
 function extractIpFromIceCandidate(
   candidate: string | undefined,
+  pushDebug?: (message: string) => void,
 ): { value?: string; diagnostic: string } | undefined {
   if (!candidate) {
+    pushDebug?.('Candidate string is empty, skipping parse')
     return undefined
   }
 
   const parts = candidate.trim().split(/\s+/)
   const candidateAddress = parts[4]
+  pushDebug?.(`Candidate token[4]=${candidateAddress ?? 'undefined'}`)
 
   if (isValidIpv4(candidateAddress) || isValidIpv6(candidateAddress)) {
+    pushDebug?.(`Direct candidate address matched IP: ${candidateAddress}`)
     return {
       value: candidateAddress,
       diagnostic: `WebRTC IP найден: ${candidateAddress}`,
@@ -281,6 +332,7 @@ function extractIpFromIceCandidate(
   }
 
   if (isMdnsHostname(candidateAddress)) {
+    pushDebug?.(`Candidate contains mDNS hostname: ${candidateAddress}`)
     return {
       diagnostic: 'WebRTC IP не получен: браузер не вернул пригодный адрес',
     }
@@ -291,6 +343,7 @@ function extractIpFromIceCandidate(
   )
 
   if (!fallbackMatch) {
+    pushDebug?.('Regex fallback did not find any IP-like tokens')
     return undefined
   }
 
@@ -299,9 +352,13 @@ function extractIpFromIceCandidate(
   )
 
   if (!matchedIp) {
+    pushDebug?.(
+      `Regex fallback found tokens but none validated as IP: ${fallbackMatch.join(', ')}`,
+    )
     return undefined
   }
 
+  pushDebug?.(`Regex fallback matched IP: ${matchedIp}`)
   return {
     value: matchedIp,
     diagnostic: `WebRTC IP найден: ${matchedIp}`,
@@ -466,6 +523,16 @@ export async function collectFingerprintEvent(
           webrtcResult.status === 'fulfilled'
             ? webrtcResult.value.diagnostic
             : `Ошибка WebRTC promise: ${getErrorMessage(webrtcResult.reason)}`,
+      },
+      debug: {
+        webrtc:
+          webrtcResult.status === 'fulfilled'
+            ? (webrtcResult.value.debug ?? [])
+            : [
+                `[${new Date().toISOString()}] promise rejected: ${getErrorMessage(
+                  webrtcResult.reason,
+                )}`,
+              ],
       },
     },
   }

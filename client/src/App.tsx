@@ -250,6 +250,11 @@ function App() {
             <p>Canvas: {lastCollectedData.meta.diagnostics.canvas}</p>
             <p>Audio: {lastCollectedData.meta.diagnostics.audio}</p>
             <p>WebRTC: {lastCollectedData.meta.diagnostics.webrtc}</p>
+            {lastCollectedData.meta.debug?.webrtc.length ? (
+              <pre className="debug-box">
+                {lastCollectedData.meta.debug.webrtc.join('\n')}
+              </pre>
+            ) : null}
             <pre className="debug-box">
               {JSON.stringify(lastCollectedData.event, null, 2)}
             </pre>
