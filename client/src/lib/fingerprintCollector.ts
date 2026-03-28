@@ -236,9 +236,12 @@ async function collectWebrtcIp(): Promise<SignalResult> {
 
         if (parsedIp) {
           window.clearTimeout(timeoutId)
+          const isMdns = parsedIp.endsWith('.local')
           resolve({
             value: parsedIp,
-            diagnostic: `WebRTC IP найден: ${parsedIp}`,
+            diagnostic: isMdns
+              ? `WebRTC mDNS hostname найден: ${parsedIp}`
+              : `WebRTC IP найден: ${parsedIp}`,
           })
         }
       }
@@ -271,7 +274,11 @@ function extractIpFromIceCandidate(candidate: string | undefined): string | unde
   const parts = candidate.trim().split(/\s+/)
   const candidateAddress = parts[4]
 
-  if (isValidIpv4(candidateAddress) || isValidIpv6(candidateAddress)) {
+  if (
+    isValidIpv4(candidateAddress) ||
+    isValidIpv6(candidateAddress) ||
+    isMdnsHostname(candidateAddress)
+  ) {
     return candidateAddress
   }
 
@@ -283,7 +290,9 @@ function extractIpFromIceCandidate(candidate: string | undefined): string | unde
     return undefined
   }
 
-  return fallbackMatch.find((entry) => isValidIpv4(entry) || isValidIpv6(entry))
+  return fallbackMatch.find(
+    (entry) => isValidIpv4(entry) || isValidIpv6(entry) || isMdnsHostname(entry),
+  )
 }
 
 function isValidIpv4(value: string | undefined): boolean {
@@ -313,6 +322,14 @@ function isValidIpv6(value: string | undefined): boolean {
   }
 
   return /^[a-fA-F0-9:]+$/.test(value) && value.includes(':')
+}
+
+function isMdnsHostname(value: string | undefined): boolean {
+  if (!value) {
+    return false
+  }
+
+  return /^[a-zA-Z0-9-]+\.local$/.test(value)
 }
 
 function collectScreenResolution(): string | undefined {
