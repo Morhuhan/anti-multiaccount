@@ -105,6 +105,13 @@ function App() {
   async function handleRegisterSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage(null)
+    const email = registerForm.email.trim()
+
+    if (!isValidEmail(email)) {
+      setActionState('Проверка формы')
+      setErrorMessage('Введите корректный email адрес')
+      return
+    }
     setActionState('Сбор отпечатка для регистрации...')
 
     try {
@@ -118,7 +125,7 @@ function App() {
 
       const response = await registerUser({
         name: registerForm.name || undefined,
-        email: registerForm.email,
+        email,
         fingerprintEvent: {
           ...collected.event,
           authAccount:
@@ -149,6 +156,13 @@ function App() {
   async function handleLoginSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage(null)
+    const email = loginForm.email.trim()
+
+    if (email && !isValidEmail(email)) {
+      setActionState('Проверка формы')
+      setErrorMessage('Введите корректный email адрес')
+      return
+    }
     setActionState('Сбор отпечатка для входа...')
 
     try {
@@ -157,7 +171,7 @@ function App() {
       setActionState('Отправка входа...')
 
       const response = await loginUser({
-        email: loginForm.email || undefined,
+        email: email || undefined,
         userId: loginForm.userId ? Number.parseInt(loginForm.userId, 10) : undefined,
         fingerprintEvent: collected.event,
       })
@@ -488,6 +502,10 @@ function extractErrorMessage(error: unknown): string {
   }
 
   return 'Неизвестная ошибка'
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
 export default App
