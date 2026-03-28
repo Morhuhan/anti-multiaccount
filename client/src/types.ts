@@ -39,6 +39,11 @@ export type FingerprintCollectionMeta = {
   formWasReset: boolean
   registrationSpeedMs?: number
   collectedAt: string
+  diagnostics: {
+    canvas: string
+    audio: string
+    webrtc: string
+  }
 }
 
 export type FingerprintCollectionResult = {

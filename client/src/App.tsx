@@ -247,6 +247,9 @@ function App() {
               Форма устарела и таймер был сброшен:{' '}
               {lastCollectedData.meta.formWasReset ? 'да' : 'нет'}
             </p>
+            <p>Canvas: {lastCollectedData.meta.diagnostics.canvas}</p>
+            <p>Audio: {lastCollectedData.meta.diagnostics.audio}</p>
+            <p>WebRTC: {lastCollectedData.meta.diagnostics.webrtc}</p>
             <pre className="debug-box">
               {JSON.stringify(lastCollectedData.event, null, 2)}
             </pre>

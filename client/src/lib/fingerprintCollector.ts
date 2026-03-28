@@ -19,6 +19,11 @@ type CollectorOptions = {
   promoCode?: string
 }
 
+type SignalResult = {
+  value?: string
+  diagnostic: string
+}
+
 type BatteryManagerLike = {
   charging?: boolean
   level?: number
@@ -31,14 +36,36 @@ declare global {
 }
 
 async function hashText(value: string): Promise<string> {
-  const buffer = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  )
+  if (globalThis.crypto?.subtle) {
+    const buffer = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(value),
+    )
 
-  return [...new Uint8Array(buffer)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
+    return [...new Uint8Array(buffer)]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+  }
+
+  return fallbackHash(value)
+}
+
+function fallbackHash(value: string): string {
+  let hashA = 0x811c9dc5
+  let hashB = 0x01000193
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    hashA ^= code
+    hashA = Math.imul(hashA, 0x01000193)
+    hashB = Math.imul(hashB ^ code, 0x45d9f3b)
+  }
+
+  const partA = (hashA >>> 0).toString(16).padStart(8, '0')
+  const partB = (hashB >>> 0).toString(16).padStart(8, '0')
+  const reversed = `${partB}${partA}`.split('').reverse().join('')
+
+  return `${partA}${partB}${reversed}`.slice(0, 64)
 }
 
 function getAffiliateId(): string | undefined {
@@ -59,7 +86,7 @@ function getAffiliateId(): string | undefined {
   )
 }
 
-async function collectCanvasHash(): Promise<string | undefined> {
+async function collectCanvasHash(): Promise<SignalResult> {
   try {
     const canvas = document.createElement('canvas')
     canvas.width = 280
@@ -67,7 +94,9 @@ async function collectCanvasHash(): Promise<string | undefined> {
     const context = canvas.getContext('2d')
 
     if (!context) {
-      return undefined
+      return {
+        diagnostic: 'Canvas 2D context недоступен',
+      }
     }
 
     context.textBaseline = 'top'
@@ -81,13 +110,18 @@ async function collectCanvasHash(): Promise<string | undefined> {
     context.arc(240, 36, 18, 0, Math.PI * 2)
     context.stroke()
 
-    return hashText(canvas.toDataURL())
-  } catch {
-    return undefined
+    return {
+      value: await hashText(canvas.toDataURL()),
+      diagnostic: 'Canvas hash успешно собран',
+    }
+  } catch (error) {
+    return {
+      diagnostic: `Ошибка Canvas: ${getErrorMessage(error)}`,
+    }
   }
 }
 
-async function collectAudioHash(): Promise<string | undefined> {
+async function collectAudioHash(): Promise<SignalResult> {
   try {
     const OfflineAudioContextCtor =
       window.OfflineAudioContext ||
@@ -98,7 +132,9 @@ async function collectAudioHash(): Promise<string | undefined> {
       ).webkitOfflineAudioContext
 
     if (!OfflineAudioContextCtor) {
-      return undefined
+      return {
+        diagnostic: 'OfflineAudioContext недоступен',
+      }
     }
 
     const context = new OfflineAudioContextCtor(1, 44100, 44100)
@@ -120,9 +156,14 @@ async function collectAudioHash(): Promise<string | undefined> {
     const rendered = await context.startRendering()
     const channel = rendered.getChannelData(0)
     const sample = Array.from(channel.slice(0, 120)).join(',')
-    return hashText(sample)
-  } catch {
-    return undefined
+    return {
+      value: await hashText(sample),
+      diagnostic: 'Audio hash успешно собран',
+    }
+  } catch (error) {
+    return {
+      diagnostic: `Ошибка Audio: ${getErrorMessage(error)}`,
+    }
   }
 }
 
@@ -169,13 +210,25 @@ async function collectBatteryStatus(): Promise<
   }
 }
 
-async function collectWebrtcIp(): Promise<string | undefined> {
+async function collectWebrtcIp(): Promise<SignalResult> {
   try {
+    if (typeof RTCPeerConnection === 'undefined') {
+      return {
+        diagnostic: 'RTCPeerConnection недоступен',
+      }
+    }
+
     const connection = new RTCPeerConnection({ iceServers: [] })
     connection.createDataChannel('anti-multiaccount')
 
-    const foundIp = await new Promise<string | undefined>((resolve) => {
-      const timeoutId = window.setTimeout(() => resolve(undefined), 1200)
+    const foundIp = await new Promise<SignalResult>((resolve) => {
+      const timeoutId = window.setTimeout(
+        () =>
+          resolve({
+            diagnostic: 'WebRTC: таймаут ожидания ICE candidate',
+          }),
+        1200,
+      )
 
       connection.onicecandidate = (event) => {
         const candidate = event.candidate?.candidate
@@ -185,15 +238,30 @@ async function collectWebrtcIp(): Promise<string | undefined> {
 
         if (match?.[1]) {
           window.clearTimeout(timeoutId)
-          resolve(match[1])
+          resolve({
+            value: match[1],
+            diagnostic: `WebRTC IP найден: ${match[1]}`,
+          })
         }
       }
+
+      void connection
+        .createOffer()
+        .then((offer) => connection.setLocalDescription(offer))
+        .catch((error) => {
+          window.clearTimeout(timeoutId)
+          resolve({
+            diagnostic: `Ошибка createOffer/setLocalDescription: ${getErrorMessage(error)}`,
+          })
+        })
     })
 
     connection.close()
     return foundIp
-  } catch {
-    return undefined
+  } catch (error) {
+    return {
+      diagnostic: `Ошибка WebRTC: ${getErrorMessage(error)}`,
+    }
   }
 }
 
@@ -240,6 +308,14 @@ function getRegistrationSpeedMeta(): {
   }
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return String(error)
+}
+
 export async function collectFingerprintEvent(
   options: CollectorOptions,
 ): Promise<FingerprintCollectionResult> {
@@ -265,8 +341,9 @@ export async function collectFingerprintEvent(
 
   const fingerprint: FingerprintPayload = {
     fHash: visitorData.visitorId,
-    canvasId: canvasResult.status === 'fulfilled' ? canvasResult.value : undefined,
-    audioId: audioResult.status === 'fulfilled' ? audioResult.value : undefined,
+    canvasId:
+      canvasResult.status === 'fulfilled' ? canvasResult.value.value : undefined,
+    audioId: audioResult.status === 'fulfilled' ? audioResult.value.value : undefined,
     webglVendor: vendor,
     webglRenderer: renderer,
     userAgent: window.navigator.userAgent,
@@ -278,7 +355,8 @@ export async function collectFingerprintEvent(
   }
 
   const context: FingerprintContextPayload = {
-    ipWebrtc: webrtcResult.status === 'fulfilled' ? webrtcResult.value : undefined,
+    ipWebrtc:
+      webrtcResult.status === 'fulfilled' ? webrtcResult.value.value : undefined,
     cookieId: Cookies.get(COOKIE_NAME),
     affiliateId: getAffiliateId(),
     registrationSpeedMs: registrationMeta.registrationSpeedMs,
@@ -295,6 +373,20 @@ export async function collectFingerprintEvent(
       formWasReset: registrationMeta.formWasReset,
       registrationSpeedMs: registrationMeta.registrationSpeedMs,
       collectedAt: new Date().toISOString(),
+      diagnostics: {
+        canvas:
+          canvasResult.status === 'fulfilled'
+            ? canvasResult.value.diagnostic
+            : `Ошибка Canvas promise: ${getErrorMessage(canvasResult.reason)}`,
+        audio:
+          audioResult.status === 'fulfilled'
+            ? audioResult.value.diagnostic
+            : `Ошибка Audio promise: ${getErrorMessage(audioResult.reason)}`,
+        webrtc:
+          webrtcResult.status === 'fulfilled'
+            ? webrtcResult.value.diagnostic
+            : `Ошибка WebRTC promise: ${getErrorMessage(webrtcResult.reason)}`,
+      },
     },
   }
 }
