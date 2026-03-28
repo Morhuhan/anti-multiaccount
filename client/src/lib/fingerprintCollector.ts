@@ -236,12 +236,9 @@ async function collectWebrtcIp(): Promise<SignalResult> {
 
         if (parsedIp) {
           window.clearTimeout(timeoutId)
-          const isMdns = parsedIp.endsWith('.local')
           resolve({
-            value: parsedIp,
-            diagnostic: isMdns
-              ? `WebRTC mDNS hostname найден: ${parsedIp}`
-              : `WebRTC IP найден: ${parsedIp}`,
+            value: parsedIp.value,
+            diagnostic: parsedIp.diagnostic,
           })
         }
       }
@@ -266,7 +263,9 @@ async function collectWebrtcIp(): Promise<SignalResult> {
   }
 }
 
-function extractIpFromIceCandidate(candidate: string | undefined): string | undefined {
+function extractIpFromIceCandidate(
+  candidate: string | undefined,
+): { value?: string; diagnostic: string } | undefined {
   if (!candidate) {
     return undefined
   }
@@ -274,12 +273,17 @@ function extractIpFromIceCandidate(candidate: string | undefined): string | unde
   const parts = candidate.trim().split(/\s+/)
   const candidateAddress = parts[4]
 
-  if (
-    isValidIpv4(candidateAddress) ||
-    isValidIpv6(candidateAddress) ||
-    isMdnsHostname(candidateAddress)
-  ) {
-    return candidateAddress
+  if (isValidIpv4(candidateAddress) || isValidIpv6(candidateAddress)) {
+    return {
+      value: candidateAddress,
+      diagnostic: `WebRTC IP найден: ${candidateAddress}`,
+    }
+  }
+
+  if (isMdnsHostname(candidateAddress)) {
+    return {
+      diagnostic: 'WebRTC IP не получен: браузер не вернул пригодный адрес',
+    }
   }
 
   const fallbackMatch = candidate.match(
@@ -290,9 +294,18 @@ function extractIpFromIceCandidate(candidate: string | undefined): string | unde
     return undefined
   }
 
-  return fallbackMatch.find(
-    (entry) => isValidIpv4(entry) || isValidIpv6(entry) || isMdnsHostname(entry),
+  const matchedIp = fallbackMatch.find(
+    (entry) => isValidIpv4(entry) || isValidIpv6(entry),
   )
+
+  if (!matchedIp) {
+    return undefined
+  }
+
+  return {
+    value: matchedIp,
+    diagnostic: `WebRTC IP найден: ${matchedIp}`,
+  }
 }
 
 function isValidIpv4(value: string | undefined): boolean {
