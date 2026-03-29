@@ -22,6 +22,7 @@ function normalizeIdentifier(value) {
 function getRequestIp(req) {
     const forwarded = req.headers['x-forwarded-for'];
     if (typeof forwarded === 'string') {
+        // Берём первый IP из цепочки прокси
         return forwarded.split(',')[0]?.trim();
     }
     if (Array.isArray(forwarded)) {
@@ -35,6 +36,7 @@ function ensureCookieId(req, res) {
         return existing;
     }
     const generated = (0, node_crypto_1.randomUUID)();
+    // Cookie должен жить между визитами, иначе связь событий теряется
     res.cookie(exports.COOKIE_NAME, generated, {
         httpOnly: false,
         sameSite: 'lax',
@@ -47,6 +49,7 @@ function buildWebglId(vendor, renderer) {
     if (!vendor || !renderer) {
         return undefined;
     }
+    // Склеиваем GPU-подпись в один ключ для быстрых сравнений
     return `${vendor.toLowerCase()}::${renderer.toLowerCase()}`;
 }
 //# sourceMappingURL=http.js.map

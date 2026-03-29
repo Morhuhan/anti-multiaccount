@@ -6,11 +6,22 @@ import type {
   RelatedAccount,
   UserDetails,
 } from '../types'
+import { loadFingerprintEvent } from './loadCollector'
 
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
 })
+
+type ActivityTrackParams = {
+  userId: number
+  activityType: string
+  activityTarget?: string
+}
+
+type TrackedActionParams<T> = ActivityTrackParams & {
+  operation: () => Promise<T>
+}
 
 export async function fetchAnalyticsUsers(): Promise<AnalyticsUser[]> {
   const response = await api.get<{ users: AnalyticsUser[] }>('/analytics/relationships')
@@ -59,4 +70,36 @@ export async function resetDemoData(): Promise<{ success: boolean; message: stri
     '/admin/reset-demo-data',
   )
   return response.data
+}
+
+export async function trackUserActivity(params: ActivityTrackParams): Promise<void> {
+  const collected = await loadFingerprintEvent('activity')
+
+  await api.post('/activity/track', {
+    userId: params.userId,
+    fingerprintEvent: {
+      ...collected.event,
+      context: {
+        ...collected.event.context,
+        activityType: params.activityType,
+        activityTarget: params.activityTarget,
+      },
+    },
+  })
+}
+
+export async function withTrackedUserAction<T>(
+  params: TrackedActionParams<T>,
+): Promise<T> {
+  const result = await params.operation()
+
+  void trackUserActivity({
+    userId: params.userId,
+    activityType: params.activityType,
+    activityTarget: params.activityTarget,
+  }).catch((error: unknown) => {
+    console.error('Activity tracking failed', error)
+  })
+
+  return result
 }

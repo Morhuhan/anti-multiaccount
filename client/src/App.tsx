@@ -10,6 +10,7 @@ import {
   loginUser,
   registerUser,
   resetDemoData,
+  withTrackedUserAction,
 } from './lib/api'
 import { loadFingerprintEvent } from './lib/loadCollector'
 import type {
@@ -74,10 +75,16 @@ function App() {
     setLoadingDetails(true)
 
     try {
-      const [details, related] = await Promise.all([
-        fetchUserDetails(userId),
-        fetchRelatedAccounts(userId),
-      ])
+      const [details, related] = await withTrackedUserAction({
+        userId,
+        activityType: 'open_user_panel',
+        activityTarget: String(userId),
+        operation: async () =>
+          Promise.all([
+            fetchUserDetails(userId),
+            fetchRelatedAccounts(userId),
+          ]),
+      })
 
       startTransition(() => {
         setSelectedUserDetails(details)

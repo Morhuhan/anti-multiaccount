@@ -36,7 +36,7 @@ function fingerprintAuditMiddleware(req, res, next) {
         return;
     }
     res.on('finish', () => {
-        // Schedule after the response lifecycle so activity tracking never delays the caller.
+        // Пишем отпечаток после ответа
         setImmediate(() => {
             (0, fingerprintQueueService_1.enqueueTask)(async () => {
                 await (0, fingerprintIngestService_1.ingestFingerprintEvent)({

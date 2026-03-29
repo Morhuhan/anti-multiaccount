@@ -109,6 +109,8 @@ export async function ingestFingerprintEvent(
       affiliateId: normalizeIdentifier(context?.affiliateId) ?? null,
       registrationSpeedMs: context?.registrationSpeedMs ?? null,
       promoCode: normalizeOptionalString(context?.promoCode) ?? null,
+      activityType: normalizeIdentifier(context?.activityType) ?? null,
+      activityTarget: normalizeOptionalString(context?.activityTarget) ?? null,
     },
   }
 

@@ -21,6 +21,8 @@ export type FingerprintContextPayload = {
   affiliateId?: string | undefined
   registrationSpeedMs?: number | undefined
   promoCode?: string | undefined
+  activityType?: string | undefined
+  activityTarget?: string | undefined
 }
 
 export type AuthAccountPayload = {

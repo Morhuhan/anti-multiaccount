@@ -27,8 +27,7 @@ async function register(req, res) {
     if (existingUser) {
         throw new errors_1.ApiError(409, 'User with this email already exists');
     }
-    // Registration remains synchronous because the current API contract
-    // returns the created fingerprint and cookie identifiers to the client.
+    // Здесь запись синхронная: API возвращает fingerprint_id и cookie_id
     const user = await models_1.User.create({
         email,
         name: (0, http_1.normalizeOptionalString)(parsed.data.name) ?? null,

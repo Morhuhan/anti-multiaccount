@@ -50,7 +50,7 @@ function applyRule(candidate, ruleKey, otherFingerprintId, otherCreatedAt) {
     }
 }
 function evaluateFingerprintPair(currentFingerprint, otherFingerprint, candidate) {
-    // Exact identifiers are treated as strongest evidence and score immediately.
+    // Точные совпадения считаем сильным сигналом
     if (currentFingerprint.fHash &&
         otherFingerprint.fHash &&
         currentFingerprint.fHash === otherFingerprint.fHash) {
@@ -79,8 +79,7 @@ function evaluateFingerprintPair(currentFingerprint, otherFingerprint, candidate
     }
     const currentUserAgent = getUserAgentFingerprint(currentFingerprint);
     const otherUserAgent = getUserAgentFingerprint(otherFingerprint);
-    // Network signature is intentionally weaker than hard device matches because
-    // shared IPs can otherwise produce noisy links.
+    // Сетевой сигнал слабее из-за общих IP
     if (currentFingerprint.ipPrimary &&
         otherFingerprint.ipPrimary &&
         currentFingerprint.ipPrimary === otherFingerprint.ipPrimary &&
@@ -126,8 +125,7 @@ async function getRelatedAccounts(userId) {
     if (!user) {
         throw new errors_1.ApiError(404, 'User not found');
     }
-    // Data is loaded in bulk once so pairwise scoring works in memory without
-    // a cascade of N+1 database roundtrips.
+    // Загружаем данные пачками, без N+1
     const [currentFingerprintRows, currentAuthRows, otherUserRows, otherFingerprintRows, otherAuthRows] = await Promise.all([
         models_1.UserFingerprint.findAll({
             where: { userId },

@@ -23,7 +23,7 @@ function getDatabaseConfig() {
     };
 }
 const config = getDatabaseConfig();
-// A single Sequelize instance keeps connection pooling and model metadata in one place.
+// Единый экземпляр ORM
 exports.sequelize = new sequelize_1.Sequelize(config.database, config.username, config.password, {
     host: config.host,
     port: config.port,

@@ -34,8 +34,6 @@ async function upsertAuthAccount(userId, authAccount) {
     if (existingAuthAccount) {
         return;
     }
-    // We only persist a provider link once per user to keep related-account
-    // detection deterministic and avoid duplicate evidence.
     await models_1.UserAuthAccount.create({
         userId,
         provider,
@@ -56,8 +54,6 @@ async function ingestFingerprintEvent(params) {
     const webglRenderer = (0, http_1.normalizeOptionalString)(fingerprint.webglRenderer);
     const webglId = (0, http_1.buildWebglId)(webglVendor, webglRenderer);
     const userAgent = (0, http_1.normalizeOptionalString)(fingerprint.userAgent);
-    // We keep the full normalized payload in JSON so later heuristics can be extended
-    // without changing the narrow indexed columns used for fast lookups.
     const payload = {
         fingerprint: {
             fHash: (0, http_1.normalizeOptionalString)(fingerprint.fHash) ?? null,
@@ -80,11 +76,11 @@ async function ingestFingerprintEvent(params) {
             affiliateId: (0, http_1.normalizeIdentifier)(context?.affiliateId) ?? null,
             registrationSpeedMs: context?.registrationSpeedMs ?? null,
             promoCode: (0, http_1.normalizeOptionalString)(context?.promoCode) ?? null,
+            activityType: (0, http_1.normalizeIdentifier)(context?.activityType) ?? null,
+            activityTarget: (0, http_1.normalizeOptionalString)(context?.activityTarget) ?? null,
         },
     };
     await upsertAuthAccount(userId, authAccount);
-    // Indexed columns store the fields we query often, while the JSON payload keeps
-    // the richer context available for future antifraud rules and manual analysis.
     const record = await models_1.UserFingerprint.create({
         userId,
         eventType,

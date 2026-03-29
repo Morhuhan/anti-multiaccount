@@ -159,6 +159,7 @@ UserFingerprint.init({
     ],
 });
 User.hasMany(UserAuthAccount, {
+    // Внешние аккаунты пользователя
     foreignKey: 'userId',
     as: 'authAccounts',
 });
@@ -167,6 +168,7 @@ UserAuthAccount.belongsTo(User, {
     as: 'user',
 });
 User.hasMany(UserFingerprint, {
+    // История отпечатков пользователя
     foreignKey: 'userId',
     as: 'fingerprints',
 });

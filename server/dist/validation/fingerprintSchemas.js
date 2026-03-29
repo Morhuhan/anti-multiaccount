@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.promoActivationSchema = exports.loginSchema = exports.registerSchema = exports.genericFingerprintEventSchema = void 0;
+exports.activityTrackSchema = exports.promoActivationSchema = exports.loginSchema = exports.registerSchema = exports.genericFingerprintEventSchema = void 0;
 const zod_1 = require("zod");
 const batterySchema = zod_1.z
     .object({
@@ -29,6 +29,8 @@ const contextSchema = zod_1.z
     affiliateId: zod_1.z.string().trim().min(1).max(255).optional(),
     registrationSpeedMs: zod_1.z.number().int().min(0).max(300_000).optional(),
     promoCode: zod_1.z.string().trim().min(1).max(255).optional(),
+    activityType: zod_1.z.string().trim().min(1).max(128).optional(),
+    activityTarget: zod_1.z.string().trim().min(1).max(255).optional(),
 })
     .optional();
 const authAccountSchema = zod_1.z
@@ -62,6 +64,12 @@ exports.promoActivationSchema = zod_1.z.object({
     promoCode: zod_1.z.string().trim().min(1).max(255),
     fingerprintEvent: exports.genericFingerprintEventSchema.extend({
         eventType: zod_1.z.literal('promo_activation'),
+    }),
+});
+exports.activityTrackSchema = zod_1.z.object({
+    userId: zod_1.z.number().int().positive(),
+    fingerprintEvent: exports.genericFingerprintEventSchema.extend({
+        eventType: zod_1.z.literal('activity'),
     }),
 });
 //# sourceMappingURL=fingerprintSchemas.js.map

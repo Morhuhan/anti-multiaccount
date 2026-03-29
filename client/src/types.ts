@@ -23,6 +23,8 @@ export type FingerprintContextPayload = {
   affiliateId?: string
   registrationSpeedMs?: number
   promoCode?: string
+  activityType?: string
+  activityTarget?: string
 }
 
 export type FingerprintEventDto = {

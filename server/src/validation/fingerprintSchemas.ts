@@ -29,6 +29,8 @@ const contextSchema = z
     affiliateId: z.string().trim().min(1).max(255).optional(),
     registrationSpeedMs: z.number().int().min(0).max(300_000).optional(),
     promoCode: z.string().trim().min(1).max(255).optional(),
+    activityType: z.string().trim().min(1).max(128).optional(),
+    activityTarget: z.string().trim().min(1).max(255).optional(),
   })
   .optional()
 
@@ -67,5 +69,12 @@ export const promoActivationSchema = z.object({
   promoCode: z.string().trim().min(1).max(255),
   fingerprintEvent: genericFingerprintEventSchema.extend({
     eventType: z.literal('promo_activation'),
+  }),
+})
+
+export const activityTrackSchema = z.object({
+  userId: z.number().int().positive(),
+  fingerprintEvent: genericFingerprintEventSchema.extend({
+    eventType: z.literal('activity'),
   }),
 })
