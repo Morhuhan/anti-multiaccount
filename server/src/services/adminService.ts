@@ -1,8 +1,8 @@
 import { User, UserAuthAccount, UserFingerprint } from '../models'
 
 export async function clearAllDemoData(): Promise<void> {
-  // Сначала дочерние таблицы
-  await UserFingerprint.truncate()
-  await UserAuthAccount.truncate()
-  await User.truncate()
+  // Удаляем записи по порядку, совместимому с внешними ключами
+  await UserFingerprint.destroy({ where: {} })
+  await UserAuthAccount.destroy({ where: {} })
+  await User.destroy({ where: {} })
 }
