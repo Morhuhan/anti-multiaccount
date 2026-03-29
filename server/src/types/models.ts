@@ -16,7 +16,7 @@ export type UserAuthAccountRow = {
 export type UserFingerprintRow = {
   id: number
   userId: number
-  eventType: 'register' | 'login' | 'promo_activation'
+  eventType: 'register' | 'login' | 'promo_activation' | 'activity'
   fHash: string | null
   ipPrimary: string | null
   ipWebrtc: string | null

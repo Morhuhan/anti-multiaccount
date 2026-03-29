@@ -1,33 +1,50 @@
-import mysql from 'mysql2/promise'
+import { Sequelize } from 'sequelize'
 
-function createPoolFromEnv() {
+type DatabaseConfig = {
+  database: string
+  username: string
+  password: string
+  host: string
+  port: number
+}
+
+function getDatabaseConfig(): DatabaseConfig {
   const databaseUrl = process.env.DATABASE_URL
 
   if (databaseUrl) {
     const parsed = new URL(databaseUrl)
 
-    return mysql.createPool({
+    return {
       host: parsed.hostname,
       port: parsed.port ? Number.parseInt(parsed.port, 10) : 3306,
-      user: decodeURIComponent(parsed.username),
+      username: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
       database: parsed.pathname.replace(/^\//, ''),
-      waitForConnections: true,
-      connectionLimit: 10,
-      namedPlaceholders: true,
-    })
+    }
   }
 
-  return mysql.createPool({
+  return {
     host: process.env.DB_HOST ?? 'localhost',
     port: Number.parseInt(process.env.DB_PORT ?? '3306', 10),
-    user: process.env.DB_USER ?? 'root',
+    username: process.env.DB_USER ?? 'root',
     password: process.env.DB_PASSWORD ?? '',
     database: process.env.DB_NAME ?? 'anti_multiaccount',
-    waitForConnections: true,
-    connectionLimit: 10,
-    namedPlaceholders: true,
-  })
+  }
 }
 
-export const db = createPoolFromEnv()
+const config = getDatabaseConfig()
+
+// Единый экземпляр ORM
+export const sequelize = new Sequelize(config.database, config.username, config.password, {
+  host: config.host,
+  port: config.port,
+  dialect: 'mysql',
+  logging: false,
+  dialectModule: require('mysql2'),
+  pool: {
+    max: 10,
+    min: 0,
+    idle: 10_000,
+    acquire: 30_000,
+  },
+})

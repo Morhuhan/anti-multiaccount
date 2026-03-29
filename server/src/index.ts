@@ -7,7 +7,9 @@ import helmet from 'helmet'
 import type { NextFunction, Request, Response } from 'express'
 import { ZodError } from 'zod'
 
-import { db } from './lib/db'
+import { sequelize } from './lib/db'
+import { fingerprintAuditMiddleware } from './middleware/fingerprintAuditMiddleware'
+import './models'
 import { apiRouter } from './routes'
 import { ApiError } from './utils/errors'
 
@@ -24,9 +26,10 @@ app.use(
 app.use(helmet())
 app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
+app.use(fingerprintAuditMiddleware)
 
 app.get('/health', async (_req, res) => {
-  await db.query('SELECT 1')
+  await sequelize.authenticate()
   res.json({ status: 'ok' })
 })
 

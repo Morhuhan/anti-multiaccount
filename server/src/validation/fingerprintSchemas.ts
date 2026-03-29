@@ -39,35 +39,33 @@ const authAccountSchema = z
   })
   .optional()
 
+export const genericFingerprintEventSchema = z.object({
+  eventType: z.enum(['register', 'login', 'promo_activation', 'activity']),
+  fingerprint: fingerprintSchema,
+  context: contextSchema,
+  authAccount: authAccountSchema,
+})
+
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   email: z.string().trim().email().max(255),
-  fingerprintEvent: z.object({
+  fingerprintEvent: genericFingerprintEventSchema.extend({
     eventType: z.literal('register'),
-    fingerprint: fingerprintSchema,
-    context: contextSchema,
-    authAccount: authAccountSchema,
   }),
 })
 
 export const loginSchema = z.object({
   userId: z.number().int().positive().optional(),
   email: z.string().trim().email().max(255).optional(),
-  fingerprintEvent: z.object({
+  fingerprintEvent: genericFingerprintEventSchema.extend({
     eventType: z.literal('login'),
-    fingerprint: fingerprintSchema,
-    context: contextSchema,
-    authAccount: authAccountSchema,
   }),
 })
 
 export const promoActivationSchema = z.object({
   userId: z.number().int().positive(),
   promoCode: z.string().trim().min(1).max(255),
-  fingerprintEvent: z.object({
+  fingerprintEvent: genericFingerprintEventSchema.extend({
     eventType: z.literal('promo_activation'),
-    fingerprint: fingerprintSchema,
-    context: contextSchema,
-    authAccount: authAccountSchema,
   }),
 })

@@ -21,6 +21,7 @@ export function getRequestIp(req: Request): string | undefined {
   const forwarded = req.headers['x-forwarded-for']
 
   if (typeof forwarded === 'string') {
+    // Берём первый IP из цепочки прокси
     return forwarded.split(',')[0]?.trim()
   }
 
@@ -39,6 +40,7 @@ export function ensureCookieId(req: Request, res: Response): string {
   }
 
   const generated = randomUUID()
+  // Cookie должен жить между визитами, иначе связь событий теряется
   res.cookie(COOKIE_NAME, generated, {
     httpOnly: false,
     sameSite: 'lax',
@@ -57,5 +59,6 @@ export function buildWebglId(
     return undefined
   }
 
+  // Склеиваем GPU-подпись в один ключ для быстрых сравнений
   return `${vendor.toLowerCase()}::${renderer.toLowerCase()}`
 }

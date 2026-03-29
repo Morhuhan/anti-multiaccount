@@ -1,6 +1,6 @@
-import type { RowDataPacket } from 'mysql2'
+import { Op, col, fn } from 'sequelize'
 
-import { db } from '../lib/db'
+import { User, UserAuthAccount, UserFingerprint } from '../models'
 import type { RelatedAccountMatch } from '../types/api'
 import type { UserAuthAccountRow, UserFingerprintRow, UserRow } from '../types/models'
 import { ApiError } from '../utils/errors'
@@ -30,6 +30,11 @@ type CandidateAccumulator = {
   matchReasonSet: Set<string>
   matchedEventIds: Set<number>
   lastMatchedAt: Date
+}
+
+type FingerprintCountRow = {
+  userId: number
+  fingerprintCount: number | string
 }
 
 function parseFingerprintPayload(value: unknown): Record<string, unknown> {
@@ -74,6 +79,7 @@ function evaluateFingerprintPair(
   otherFingerprint: UserFingerprintRow,
   candidate: CandidateAccumulator,
 ): void {
+  // Точные совпадения считаем сильным сигналом
   if (
     currentFingerprint.fHash &&
     otherFingerprint.fHash &&
@@ -119,6 +125,7 @@ function evaluateFingerprintPair(
   const currentUserAgent = getUserAgentFingerprint(currentFingerprint)
   const otherUserAgent = getUserAgentFingerprint(otherFingerprint)
 
+  // Сетевой сигнал слабее из-за общих IP
   if (
     currentFingerprint.ipPrimary &&
     otherFingerprint.ipPrimary &&
@@ -130,12 +137,7 @@ function evaluateFingerprintPair(
     otherUserAgent &&
     currentUserAgent === otherUserAgent
   ) {
-    applyRule(
-      candidate,
-      'network_signature',
-      otherFingerprint.id,
-      otherFingerprint.createdAt,
-    )
+    applyRule(candidate, 'network_signature', otherFingerprint.id, otherFingerprint.createdAt)
   }
 
   if (
@@ -146,18 +148,11 @@ function evaluateFingerprintPair(
     otherFingerprint.affiliateId &&
     currentFingerprint.affiliateId === otherFingerprint.affiliateId
   ) {
-    applyRule(
-      candidate,
-      'affiliate_overlap',
-      otherFingerprint.id,
-      otherFingerprint.createdAt,
-    )
+    applyRule(candidate, 'affiliate_overlap', otherFingerprint.id, otherFingerprint.createdAt)
   }
 }
 
-function calculateConfidenceScore(
-  matchedRuleKeys: Set<keyof typeof RULE_WEIGHTS>,
-): number {
+function calculateConfidenceScore(matchedRuleKeys: Set<keyof typeof RULE_WEIGHTS>): number {
   let score = 0
 
   for (const ruleKey of matchedRuleKeys) {
@@ -183,36 +178,53 @@ function groupByUserId<T extends { userId: number }>(items: T[]): Map<number, T[
 }
 
 export async function getRelatedAccounts(userId: number): Promise<RelatedAccountMatch[]> {
-  const [userRows] = await db.query<(RowDataPacket & UserRow)[]>(
-    'SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1',
-    [userId],
-  )
-  const user = userRows[0]
+  const user = await User.findByPk(userId)
 
   if (!user) {
     throw new ApiError(404, 'User not found')
   }
 
-  const [currentFingerprintRows] = await db.query<(RowDataPacket & UserFingerprintRow)[]>(
-    'SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId = ? ORDER BY createdAt DESC',
-    [userId],
-  )
-  const [currentAuthRows] = await db.query<(RowDataPacket & UserAuthAccountRow)[]>(
-    'SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId = ? ORDER BY createdAt DESC',
-    [userId],
-  )
-  const [otherUserRows] = await db.query<(RowDataPacket & UserRow)[]>(
-    'SELECT id, email, name, createdAt FROM `User` WHERE id <> ? ORDER BY id ASC',
-    [userId],
-  )
-  const [otherFingerprintRows] = await db.query<(RowDataPacket & UserFingerprintRow)[]>(
-    'SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId <> ? ORDER BY createdAt DESC',
-    [userId],
-  )
-  const [otherAuthRows] = await db.query<(RowDataPacket & UserAuthAccountRow)[]>(
-    'SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId <> ? ORDER BY createdAt DESC',
-    [userId],
-  )
+  // Загружаем данные пачками, без N+1
+  const [currentFingerprintRows, currentAuthRows, otherUserRows, otherFingerprintRows, otherAuthRows] =
+    await Promise.all([
+      UserFingerprint.findAll({
+        where: { userId },
+        order: [['createdAt', 'DESC']],
+        raw: true,
+      }) as Promise<UserFingerprintRow[]>,
+      UserAuthAccount.findAll({
+        where: { userId },
+        order: [['createdAt', 'DESC']],
+        raw: true,
+      }) as Promise<UserAuthAccountRow[]>,
+      User.findAll({
+        where: {
+          id: {
+            [Op.ne]: userId,
+          },
+        },
+        order: [['id', 'ASC']],
+        raw: true,
+      }) as Promise<UserRow[]>,
+      UserFingerprint.findAll({
+        where: {
+          userId: {
+            [Op.ne]: userId,
+          },
+        },
+        order: [['createdAt', 'DESC']],
+        raw: true,
+      }) as Promise<UserFingerprintRow[]>,
+      UserAuthAccount.findAll({
+        where: {
+          userId: {
+            [Op.ne]: userId,
+          },
+        },
+        order: [['createdAt', 'DESC']],
+        raw: true,
+      }) as Promise<UserAuthAccountRow[]>,
+    ])
 
   const fingerprintsByUserId = groupByUserId(otherFingerprintRows)
   const authAccountsByUserId = groupByUserId(otherAuthRows)
@@ -287,21 +299,23 @@ export async function getAnalyticsRelationships(): Promise<{
     topConfidenceScore: number
   }>
 }> {
-  const [users] = await db.query<(RowDataPacket & UserRow)[]>(
-    'SELECT id, email, name, createdAt FROM `User` ORDER BY id ASC',
-  )
-  const [fingerprints] = await db.query<(RowDataPacket & Pick<UserFingerprintRow, 'userId'>)[]>(
-    'SELECT userId FROM `UserFingerprint`',
-  )
+  const [users, fingerprintCountsResult] = await Promise.all([
+    User.findAll({
+      order: [['id', 'ASC']],
+      raw: true,
+    }) as Promise<UserRow[]>,
+    UserFingerprint.findAll({
+      attributes: ['userId', [fn('COUNT', col('id')), 'fingerprintCount']],
+      group: ['userId'],
+      raw: true,
+    }),
+  ])
 
-  const fingerprintCounts = new Map<number, number>()
+  const fingerprintCountsRaw = fingerprintCountsResult as unknown as FingerprintCountRow[]
 
-  for (const fingerprint of fingerprints) {
-    fingerprintCounts.set(
-      fingerprint.userId,
-      (fingerprintCounts.get(fingerprint.userId) ?? 0) + 1,
-    )
-  }
+  const fingerprintCounts = new Map<number, number>(
+    fingerprintCountsRaw.map((row) => [Number(row.userId), Number(row.fingerprintCount)]),
+  )
 
   const enriched = await Promise.all(
     users.map(async (user) => {

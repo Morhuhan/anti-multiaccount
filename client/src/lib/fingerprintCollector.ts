@@ -453,6 +453,7 @@ function getRegistrationSpeedMeta(): {
   const elapsed = Math.max(0, Math.round(now - pageLoadStartedAt))
 
   if (elapsed > MAX_FORM_AGE_MS) {
+    // Слишком старая форма искажает метрику регистрации
     pageLoadStartedAt = now
     return {
       registrationSpeedMs: 0,
@@ -480,6 +481,7 @@ export async function collectFingerprintEvent(
   const agent = await FingerprintJS.load()
   const visitorData = await agent.get()
 
+  // Собираем сигналы параллельно, чтобы не тормозить форму из-за одного источника
   const [canvasResult, audioResult, batteryResult, webrtcResult] =
     await Promise.allSettled([
       collectCanvasHash(),

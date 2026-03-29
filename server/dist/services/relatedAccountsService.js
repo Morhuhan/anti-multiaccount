@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRelatedAccounts = getRelatedAccounts;
 exports.getAnalyticsRelationships = getAnalyticsRelationships;
-const db_1 = require("../lib/db");
+const sequelize_1 = require("sequelize");
+const models_1 = require("../models");
 const errors_1 = require("../utils/errors");
 const http_1 = require("../utils/http");
 const RULE_WEIGHTS = {
@@ -49,6 +50,7 @@ function applyRule(candidate, ruleKey, otherFingerprintId, otherCreatedAt) {
     }
 }
 function evaluateFingerprintPair(currentFingerprint, otherFingerprint, candidate) {
+    // Exact identifiers are treated as strongest evidence and score immediately.
     if (currentFingerprint.fHash &&
         otherFingerprint.fHash &&
         currentFingerprint.fHash === otherFingerprint.fHash) {
@@ -77,6 +79,8 @@ function evaluateFingerprintPair(currentFingerprint, otherFingerprint, candidate
     }
     const currentUserAgent = getUserAgentFingerprint(currentFingerprint);
     const otherUserAgent = getUserAgentFingerprint(otherFingerprint);
+    // Network signature is intentionally weaker than hard device matches because
+    // shared IPs can otherwise produce noisy links.
     if (currentFingerprint.ipPrimary &&
         otherFingerprint.ipPrimary &&
         currentFingerprint.ipPrimary === otherFingerprint.ipPrimary &&
@@ -100,9 +104,9 @@ function evaluateFingerprintPair(currentFingerprint, otherFingerprint, candidate
 function calculateConfidenceScore(matchedRuleKeys) {
     let score = 0;
     for (const ruleKey of matchedRuleKeys) {
-        score += RULE_WEIGHTS[ruleKey];
+        score = Math.max(score, RULE_WEIGHTS[ruleKey]);
     }
-    return Math.min(score, 100);
+    return score;
 }
 function groupByUserId(items) {
     const grouped = new Map();
@@ -118,16 +122,51 @@ function groupByUserId(items) {
     return grouped;
 }
 async function getRelatedAccounts(userId) {
-    const [userRows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1', [userId]);
-    const user = userRows[0];
+    const user = await models_1.User.findByPk(userId);
     if (!user) {
         throw new errors_1.ApiError(404, 'User not found');
     }
-    const [currentFingerprintRows] = await db_1.db.query('SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId = ? ORDER BY createdAt DESC', [userId]);
-    const [currentAuthRows] = await db_1.db.query('SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId = ? ORDER BY createdAt DESC', [userId]);
-    const [otherUserRows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE id <> ? ORDER BY id ASC', [userId]);
-    const [otherFingerprintRows] = await db_1.db.query('SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId <> ? ORDER BY createdAt DESC', [userId]);
-    const [otherAuthRows] = await db_1.db.query('SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId <> ? ORDER BY createdAt DESC', [userId]);
+    // Data is loaded in bulk once so pairwise scoring works in memory without
+    // a cascade of N+1 database roundtrips.
+    const [currentFingerprintRows, currentAuthRows, otherUserRows, otherFingerprintRows, otherAuthRows] = await Promise.all([
+        models_1.UserFingerprint.findAll({
+            where: { userId },
+            order: [['createdAt', 'DESC']],
+            raw: true,
+        }),
+        models_1.UserAuthAccount.findAll({
+            where: { userId },
+            order: [['createdAt', 'DESC']],
+            raw: true,
+        }),
+        models_1.User.findAll({
+            where: {
+                id: {
+                    [sequelize_1.Op.ne]: userId,
+                },
+            },
+            order: [['id', 'ASC']],
+            raw: true,
+        }),
+        models_1.UserFingerprint.findAll({
+            where: {
+                userId: {
+                    [sequelize_1.Op.ne]: userId,
+                },
+            },
+            order: [['createdAt', 'DESC']],
+            raw: true,
+        }),
+        models_1.UserAuthAccount.findAll({
+            where: {
+                userId: {
+                    [sequelize_1.Op.ne]: userId,
+                },
+            },
+            order: [['createdAt', 'DESC']],
+            raw: true,
+        }),
+    ]);
     const fingerprintsByUserId = groupByUserId(otherFingerprintRows);
     const authAccountsByUserId = groupByUserId(otherAuthRows);
     const ownProviderAccounts = new Set(currentAuthRows.map((account) => `${account.provider.toLowerCase()}::${account.providerAccountId}`));
@@ -172,12 +211,19 @@ async function getRelatedAccounts(userId) {
     });
 }
 async function getAnalyticsRelationships() {
-    const [users] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` ORDER BY id ASC');
-    const [fingerprints] = await db_1.db.query('SELECT userId FROM `UserFingerprint`');
-    const fingerprintCounts = new Map();
-    for (const fingerprint of fingerprints) {
-        fingerprintCounts.set(fingerprint.userId, (fingerprintCounts.get(fingerprint.userId) ?? 0) + 1);
-    }
+    const [users, fingerprintCountsResult] = await Promise.all([
+        models_1.User.findAll({
+            order: [['id', 'ASC']],
+            raw: true,
+        }),
+        models_1.UserFingerprint.findAll({
+            attributes: ['userId', [(0, sequelize_1.fn)('COUNT', (0, sequelize_1.col)('id')), 'fingerprintCount']],
+            group: ['userId'],
+            raw: true,
+        }),
+    ]);
+    const fingerprintCountsRaw = fingerprintCountsResult;
+    const fingerprintCounts = new Map(fingerprintCountsRaw.map((row) => [Number(row.userId), Number(row.fingerprintCount)]));
     const enriched = await Promise.all(users.map(async (user) => {
         const relatedAccounts = await getRelatedAccounts(user.id);
         return {

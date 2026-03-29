@@ -10,6 +10,8 @@ const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
 const zod_1 = require("zod");
 const db_1 = require("./lib/db");
+const fingerprintAuditMiddleware_1 = require("./middleware/fingerprintAuditMiddleware");
+require("./models");
 const routes_1 = require("./routes");
 const errors_1 = require("./utils/errors");
 const app = (0, express_1.default)();
@@ -22,8 +24,9 @@ app.use((0, cors_1.default)({
 app.use((0, helmet_1.default)());
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.json({ limit: '1mb' }));
+app.use(fingerprintAuditMiddleware_1.fingerprintAuditMiddleware);
 app.get('/health', async (_req, res) => {
-    await db_1.db.query('SELECT 1');
+    await db_1.sequelize.authenticate();
     res.json({ status: 'ok' });
 });
 app.use('/api', routes_1.apiRouter);

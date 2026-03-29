@@ -1,9 +1,7 @@
 import type { Request, Response } from 'express'
-import type { RowDataPacket } from 'mysql2'
 
-import { db } from '../lib/db'
+import { User, UserAuthAccount, UserFingerprint } from '../models'
 import { getRelatedAccounts } from '../services/relatedAccountsService'
-import type { UserAuthAccountRow, UserFingerprintRow, UserRow } from '../types/models'
 import { ApiError } from '../utils/errors'
 
 function parseUserId(value: string | string[] | undefined): number {
@@ -23,24 +21,22 @@ function parseUserId(value: string | string[] | undefined): number {
 export async function getUserFingerprints(req: Request, res: Response): Promise<void> {
   const userId = parseUserId(req.params.userId)
 
-  const [userRows] = await db.query<(RowDataPacket & UserRow)[]>(
-    'SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1',
-    [userId],
-  )
-  const user = userRows[0]
+  const user = await User.findByPk(userId)
 
   if (!user) {
     throw new ApiError(404, 'User not found')
   }
 
-  const [authAccountRows] = await db.query<(RowDataPacket & UserAuthAccountRow)[]>(
-    'SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId = ? ORDER BY createdAt DESC',
-    [userId],
-  )
-  const [fingerprintRows] = await db.query<(RowDataPacket & UserFingerprintRow)[]>(
-    'SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId = ? ORDER BY createdAt DESC',
-    [userId],
-  )
+  const [authAccountRows, fingerprintRows] = await Promise.all([
+    UserAuthAccount.findAll({
+      where: { userId },
+      order: [['createdAt', 'DESC']],
+    }),
+    UserFingerprint.findAll({
+      where: { userId },
+      order: [['createdAt', 'DESC']],
+    }),
+  ])
 
   res.json({
     user: {
@@ -69,10 +65,7 @@ export async function getUserFingerprints(req: Request, res: Response): Promise<
       cookieId: fingerprint.cookieId,
       affiliateId: fingerprint.affiliateId,
       registrationSpeedMs: fingerprint.registrationSpeedMs,
-      payload:
-        typeof fingerprint.payload === 'string'
-          ? JSON.parse(fingerprint.payload)
-          : fingerprint.payload,
+      payload: fingerprint.payload,
       createdAt: fingerprint.createdAt.toISOString(),
     })),
   })

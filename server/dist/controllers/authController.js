@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = register;
 exports.login = login;
-const db_1 = require("../lib/db");
+const models_1 = require("../models");
 const fingerprintIngestService_1 = require("../services/fingerprintIngestService");
 const errors_1 = require("../utils/errors");
 const http_1 = require("../utils/http");
@@ -20,16 +20,19 @@ async function register(req, res) {
     if (!email) {
         throw new errors_1.ApiError(400, 'Email is required');
     }
-    const [existingRows] = await db_1.db.query('SELECT id FROM `User` WHERE email = ? LIMIT 1', [email]);
-    if (existingRows[0]) {
+    const existingUser = await models_1.User.findOne({
+        where: { email },
+        attributes: ['id'],
+    });
+    if (existingUser) {
         throw new errors_1.ApiError(409, 'User with this email already exists');
     }
-    const [insertResult] = await db_1.db.execute('INSERT INTO `User` (email, name, createdAt) VALUES (?, ?, NOW())', [email, (0, http_1.normalizeOptionalString)(parsed.data.name) ?? null]);
-    const [userRows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1', [insertResult.insertId]);
-    const user = userRows[0];
-    if (!user) {
-        throw new errors_1.ApiError(500, 'Failed to create user');
-    }
+    // Registration remains synchronous because the current API contract
+    // returns the created fingerprint and cookie identifiers to the client.
+    const user = await models_1.User.create({
+        email,
+        name: (0, http_1.normalizeOptionalString)(parsed.data.name) ?? null,
+    });
     const fingerprintResult = await (0, fingerprintIngestService_1.ingestFingerprintEvent)({
         req,
         res,
@@ -59,14 +62,16 @@ async function login(req, res) {
         });
         return;
     }
-    let user;
+    let user = null;
     if (parsed.data.userId) {
-        const [rows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1', [parsed.data.userId]);
-        user = rows[0];
+        user = await models_1.User.findByPk(parsed.data.userId);
     }
     else if (parsed.data.email) {
-        const [rows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE email = ? LIMIT 1', [(0, http_1.normalizeIdentifier)(parsed.data.email)]);
-        user = rows[0];
+        user = await models_1.User.findOne({
+            where: {
+                email: (0, http_1.normalizeIdentifier)(parsed.data.email),
+            },
+        });
     }
     if (!user) {
         throw new errors_1.ApiError(404, 'User not found');

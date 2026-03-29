@@ -1,4 +1,4 @@
-export type EventType = 'register' | 'login' | 'promo_activation'
+export type EventType = 'register' | 'login' | 'promo_activation' | 'activity'
 
 export type FingerprintPayload = {
   fHash?: string

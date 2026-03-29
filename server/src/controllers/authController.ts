@@ -1,9 +1,7 @@
 import type { Request, Response } from 'express'
-import type { ResultSetHeader, RowDataPacket } from 'mysql2'
 
-import { db } from '../lib/db'
+import { User } from '../models'
 import { ingestFingerprintEvent } from '../services/fingerprintIngestService'
-import type { UserRow } from '../types/models'
 import { ApiError } from '../utils/errors'
 import { normalizeIdentifier, normalizeOptionalString } from '../utils/http'
 import { loginSchema, registerSchema } from '../validation/fingerprintSchemas'
@@ -25,29 +23,20 @@ export async function register(req: Request, res: Response): Promise<void> {
     throw new ApiError(400, 'Email is required')
   }
 
-  const [existingRows] = await db.query<(RowDataPacket & Pick<UserRow, 'id'>)[]>(
-    'SELECT id FROM `User` WHERE email = ? LIMIT 1',
-    [email],
-  )
+  const existingUser = await User.findOne({
+    where: { email },
+    attributes: ['id'],
+  })
 
-  if (existingRows[0]) {
+  if (existingUser) {
     throw new ApiError(409, 'User with this email already exists')
   }
 
-  const [insertResult] = await db.execute<ResultSetHeader>(
-    'INSERT INTO `User` (email, name, createdAt) VALUES (?, ?, NOW())',
-    [email, normalizeOptionalString(parsed.data.name) ?? null],
-  )
-
-  const [userRows] = await db.query<(RowDataPacket & UserRow)[]>(
-    'SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1',
-    [insertResult.insertId],
-  )
-  const user = userRows[0]
-
-  if (!user) {
-    throw new ApiError(500, 'Failed to create user')
-  }
+  // Здесь запись синхронная: API возвращает fingerprint_id и cookie_id
+  const user = await User.create({
+    email,
+    name: normalizeOptionalString(parsed.data.name) ?? null,
+  })
 
   const fingerprintResult = await ingestFingerprintEvent({
     req,
@@ -82,20 +71,16 @@ export async function login(req: Request, res: Response): Promise<void> {
     return
   }
 
-  let user: UserRow | undefined
+  let user: User | null = null
 
   if (parsed.data.userId) {
-    const [rows] = await db.query<(RowDataPacket & UserRow)[]>(
-      'SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1',
-      [parsed.data.userId],
-    )
-    user = rows[0]
+    user = await User.findByPk(parsed.data.userId)
   } else if (parsed.data.email) {
-    const [rows] = await db.query<(RowDataPacket & UserRow)[]>(
-      'SELECT id, email, name, createdAt FROM `User` WHERE email = ? LIMIT 1',
-      [normalizeIdentifier(parsed.data.email)],
-    )
-    user = rows[0]
+    user = await User.findOne({
+      where: {
+        email: normalizeIdentifier(parsed.data.email),
+      },
+    })
   }
 
   if (!user) {

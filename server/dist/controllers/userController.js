@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserFingerprints = getUserFingerprints;
 exports.getUserRelatedAccounts = getUserRelatedAccounts;
-const db_1 = require("../lib/db");
+const models_1 = require("../models");
 const relatedAccountsService_1 = require("../services/relatedAccountsService");
 const errors_1 = require("../utils/errors");
 function parseUserId(value) {
@@ -17,13 +17,20 @@ function parseUserId(value) {
 }
 async function getUserFingerprints(req, res) {
     const userId = parseUserId(req.params.userId);
-    const [userRows] = await db_1.db.query('SELECT id, email, name, createdAt FROM `User` WHERE id = ? LIMIT 1', [userId]);
-    const user = userRows[0];
+    const user = await models_1.User.findByPk(userId);
     if (!user) {
         throw new errors_1.ApiError(404, 'User not found');
     }
-    const [authAccountRows] = await db_1.db.query('SELECT id, userId, provider, providerAccountId, createdAt FROM `UserAuthAccount` WHERE userId = ? ORDER BY createdAt DESC', [userId]);
-    const [fingerprintRows] = await db_1.db.query('SELECT id, userId, eventType, fHash, ipPrimary, ipWebrtc, canvasId, audioId, webglVendor, webglRenderer, webglId, cookieId, affiliateId, registrationSpeedMs, payload, createdAt FROM `UserFingerprint` WHERE userId = ? ORDER BY createdAt DESC', [userId]);
+    const [authAccountRows, fingerprintRows] = await Promise.all([
+        models_1.UserAuthAccount.findAll({
+            where: { userId },
+            order: [['createdAt', 'DESC']],
+        }),
+        models_1.UserFingerprint.findAll({
+            where: { userId },
+            order: [['createdAt', 'DESC']],
+        }),
+    ]);
     res.json({
         user: {
             id: user.id,
@@ -51,9 +58,7 @@ async function getUserFingerprints(req, res) {
             cookieId: fingerprint.cookieId,
             affiliateId: fingerprint.affiliateId,
             registrationSpeedMs: fingerprint.registrationSpeedMs,
-            payload: typeof fingerprint.payload === 'string'
-                ? JSON.parse(fingerprint.payload)
-                : fingerprint.payload,
+            payload: fingerprint.payload,
             createdAt: fingerprint.createdAt.toISOString(),
         })),
     });

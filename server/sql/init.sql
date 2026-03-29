@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `UserAuthAccount` (
 CREATE TABLE IF NOT EXISTS `UserFingerprint` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `userId` INT NOT NULL,
-  `eventType` ENUM('register', 'login', 'promo_activation') NOT NULL,
+  `eventType` VARCHAR(64) NOT NULL,
   `fHash` VARCHAR(255) NULL,
   `ipPrimary` VARCHAR(64) NULL,
   `ipWebrtc` VARCHAR(64) NULL,

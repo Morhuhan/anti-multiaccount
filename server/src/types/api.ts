@@ -30,7 +30,7 @@ export type AuthAccountPayload = {
 
 export type FingerprintEventInput = {
   userId?: number
-  eventType: 'register' | 'login' | 'promo_activation'
+  eventType: 'register' | 'login' | 'promo_activation' | 'activity'
   fingerprint: FingerprintPayload
   context?: FingerprintContextPayload | undefined
   authAccount?: AuthAccountPayload | undefined
