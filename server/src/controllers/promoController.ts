@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 
-import { ingestFingerprintEvent } from '../services/fingerprintIngestService'
+import { setFingerprintAuditPayload } from '../middleware/fingerprintAuditMiddleware'
 import { promoActivationSchema } from '../validation/fingerprintSchemas'
 
 export async function activatePromo(req: Request, res: Response): Promise<void> {
@@ -14,24 +14,20 @@ export async function activatePromo(req: Request, res: Response): Promise<void> 
     return
   }
 
-  const fingerprintResult = await ingestFingerprintEvent({
-    req,
-    res,
+  setFingerprintAuditPayload(res, {
     userId: parsed.data.userId,
-    eventType: parsed.data.fingerprintEvent.eventType,
-    fingerprint: parsed.data.fingerprintEvent.fingerprint,
-    context: {
-      ...parsed.data.fingerprintEvent.context,
-      promoCode: parsed.data.promoCode,
+    fingerprintEvent: {
+      ...parsed.data.fingerprintEvent,
+      context: {
+        ...parsed.data.fingerprintEvent.context,
+        promoCode: parsed.data.promoCode,
+      },
     },
-    authAccount: parsed.data.fingerprintEvent.authAccount,
   })
 
   res.json({
     success: true,
     user_id: parsed.data.userId,
     promo_code: parsed.data.promoCode,
-    fingerprint_id: fingerprintResult.fingerprintId,
-    cookie_id: fingerprintResult.cookieId,
   })
 }

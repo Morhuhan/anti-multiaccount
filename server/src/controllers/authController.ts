@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 
 import { User } from '../models'
-import { ingestFingerprintEvent } from '../services/fingerprintIngestService'
+import { setFingerprintAuditPayload } from '../middleware/fingerprintAuditMiddleware'
 import { ApiError } from '../utils/errors'
 import { normalizeIdentifier, normalizeOptionalString } from '../utils/http'
 import { loginSchema, registerSchema } from '../validation/fingerprintSchemas'
@@ -32,20 +32,14 @@ export async function register(req: Request, res: Response): Promise<void> {
     throw new ApiError(409, 'User with this email already exists')
   }
 
-  // Здесь запись синхронная: API возвращает fingerprint_id и cookie_id
   const user = await User.create({
     email,
     name: normalizeOptionalString(parsed.data.name) ?? null,
   })
 
-  const fingerprintResult = await ingestFingerprintEvent({
-    req,
-    res,
+  setFingerprintAuditPayload(res, {
     userId: user.id,
-    eventType: parsed.data.fingerprintEvent.eventType,
-    fingerprint: parsed.data.fingerprintEvent.fingerprint,
-    context: parsed.data.fingerprintEvent.context,
-    authAccount: parsed.data.fingerprintEvent.authAccount,
+    fingerprintEvent: parsed.data.fingerprintEvent,
   })
 
   res.status(201).json({
@@ -55,8 +49,6 @@ export async function register(req: Request, res: Response): Promise<void> {
       name: user.name,
       createdAt: user.createdAt.toISOString(),
     },
-    fingerprint_id: fingerprintResult.fingerprintId,
-    cookie_id: fingerprintResult.cookieId,
   })
 }
 
@@ -87,14 +79,9 @@ export async function login(req: Request, res: Response): Promise<void> {
     throw new ApiError(404, 'User not found')
   }
 
-  const fingerprintResult = await ingestFingerprintEvent({
-    req,
-    res,
+  setFingerprintAuditPayload(res, {
     userId: user.id,
-    eventType: parsed.data.fingerprintEvent.eventType,
-    fingerprint: parsed.data.fingerprintEvent.fingerprint,
-    context: parsed.data.fingerprintEvent.context,
-    authAccount: parsed.data.fingerprintEvent.authAccount,
+    fingerprintEvent: parsed.data.fingerprintEvent,
   })
 
   res.json({
@@ -104,7 +91,5 @@ export async function login(req: Request, res: Response): Promise<void> {
       name: user.name,
       createdAt: user.createdAt.toISOString(),
     },
-    fingerprint_id: fingerprintResult.fingerprintId,
-    cookie_id: fingerprintResult.cookieId,
   })
 }

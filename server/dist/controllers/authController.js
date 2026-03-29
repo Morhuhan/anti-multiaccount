@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.register = register;
 exports.login = login;
 const models_1 = require("../models");
-const fingerprintIngestService_1 = require("../services/fingerprintIngestService");
+const fingerprintAuditMiddleware_1 = require("../middleware/fingerprintAuditMiddleware");
 const errors_1 = require("../utils/errors");
 const http_1 = require("../utils/http");
 const fingerprintSchemas_1 = require("../validation/fingerprintSchemas");
@@ -27,19 +27,13 @@ async function register(req, res) {
     if (existingUser) {
         throw new errors_1.ApiError(409, 'User with this email already exists');
     }
-    // Здесь запись синхронная: API возвращает fingerprint_id и cookie_id
     const user = await models_1.User.create({
         email,
         name: (0, http_1.normalizeOptionalString)(parsed.data.name) ?? null,
     });
-    const fingerprintResult = await (0, fingerprintIngestService_1.ingestFingerprintEvent)({
-        req,
-        res,
+    (0, fingerprintAuditMiddleware_1.setFingerprintAuditPayload)(res, {
         userId: user.id,
-        eventType: parsed.data.fingerprintEvent.eventType,
-        fingerprint: parsed.data.fingerprintEvent.fingerprint,
-        context: parsed.data.fingerprintEvent.context,
-        authAccount: parsed.data.fingerprintEvent.authAccount,
+        fingerprintEvent: parsed.data.fingerprintEvent,
     });
     res.status(201).json({
         user: {
@@ -48,8 +42,6 @@ async function register(req, res) {
             name: user.name,
             createdAt: user.createdAt.toISOString(),
         },
-        fingerprint_id: fingerprintResult.fingerprintId,
-        cookie_id: fingerprintResult.cookieId,
     });
 }
 async function login(req, res) {
@@ -75,14 +67,9 @@ async function login(req, res) {
     if (!user) {
         throw new errors_1.ApiError(404, 'User not found');
     }
-    const fingerprintResult = await (0, fingerprintIngestService_1.ingestFingerprintEvent)({
-        req,
-        res,
+    (0, fingerprintAuditMiddleware_1.setFingerprintAuditPayload)(res, {
         userId: user.id,
-        eventType: parsed.data.fingerprintEvent.eventType,
-        fingerprint: parsed.data.fingerprintEvent.fingerprint,
-        context: parsed.data.fingerprintEvent.context,
-        authAccount: parsed.data.fingerprintEvent.authAccount,
+        fingerprintEvent: parsed.data.fingerprintEvent,
     });
     res.json({
         user: {
@@ -91,8 +78,6 @@ async function login(req, res) {
             name: user.name,
             createdAt: user.createdAt.toISOString(),
         },
-        fingerprint_id: fingerprintResult.fingerprintId,
-        cookie_id: fingerprintResult.cookieId,
     });
 }
 //# sourceMappingURL=authController.js.map

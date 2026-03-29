@@ -1,14 +1,9 @@
 import type { NextFunction, Request, Response } from 'express'
 
 import type { FingerprintEventInput } from '../types/api'
+import type { FingerprintAuditPayload } from '../types/express'
 import { enqueueTask } from '../services/fingerprintQueueService'
 import { ingestFingerprintEvent } from '../services/fingerprintIngestService'
-
-const syncHandledPaths = new Set([
-  '/auth/register',
-  '/auth/login',
-  '/promos/activate',
-])
 
 type FingerprintCarrier = {
   userId?: unknown
@@ -23,14 +18,7 @@ function parseUserId(value: unknown): number | undefined {
   return value
 }
 
-function extractFingerprintPayload(req: Request): {
-  userId: number
-  fingerprintEvent: FingerprintEventInput
-} | null {
-  if (syncHandledPaths.has(req.path)) {
-    return null
-  }
-
+function extractFingerprintPayload(req: Request): FingerprintAuditPayload | null {
   const body = req.body as FingerprintCarrier | undefined
   const userId = parseUserId(body?.userId)
   const fingerprintEvent = body?.fingerprintEvent as FingerprintEventInput | undefined
@@ -45,19 +33,27 @@ function extractFingerprintPayload(req: Request): {
   }
 }
 
+export function setFingerprintAuditPayload(
+  res: Response,
+  payload: FingerprintAuditPayload,
+): void {
+  res.locals.fingerprintAuditPayload = payload
+}
+
 export function fingerprintAuditMiddleware(
   req: Request,
   res: Response,
   next: NextFunction,
 ): void {
-  const payload = extractFingerprintPayload(req)
-
-  if (!payload) {
-    next()
-    return
-  }
-
   res.on('finish', () => {
+    const payload =
+      (res.locals.fingerprintAuditPayload as FingerprintAuditPayload | undefined) ??
+      extractFingerprintPayload(req)
+
+    if (!payload) {
+      return
+    }
+
     // Пишем отпечаток после ответа
     setImmediate(() => {
       enqueueTask(async () => {

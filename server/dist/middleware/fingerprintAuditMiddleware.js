@@ -1,13 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.setFingerprintAuditPayload = setFingerprintAuditPayload;
 exports.fingerprintAuditMiddleware = fingerprintAuditMiddleware;
 const fingerprintQueueService_1 = require("../services/fingerprintQueueService");
 const fingerprintIngestService_1 = require("../services/fingerprintIngestService");
-const syncHandledPaths = new Set([
-    '/auth/register',
-    '/auth/login',
-    '/promos/activate',
-]);
 function parseUserId(value) {
     if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
         return undefined;
@@ -15,9 +11,6 @@ function parseUserId(value) {
     return value;
 }
 function extractFingerprintPayload(req) {
-    if (syncHandledPaths.has(req.path)) {
-        return null;
-    }
     const body = req.body;
     const userId = parseUserId(body?.userId);
     const fingerprintEvent = body?.fingerprintEvent;
@@ -29,13 +22,16 @@ function extractFingerprintPayload(req) {
         fingerprintEvent,
     };
 }
+function setFingerprintAuditPayload(res, payload) {
+    res.locals.fingerprintAuditPayload = payload;
+}
 function fingerprintAuditMiddleware(req, res, next) {
-    const payload = extractFingerprintPayload(req);
-    if (!payload) {
-        next();
-        return;
-    }
     res.on('finish', () => {
+        const payload = res.locals.fingerprintAuditPayload ??
+            extractFingerprintPayload(req);
+        if (!payload) {
+            return;
+        }
         // Пишем отпечаток после ответа
         setImmediate(() => {
             (0, fingerprintQueueService_1.enqueueTask)(async () => {

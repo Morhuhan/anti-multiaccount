@@ -42,7 +42,7 @@ export async function registerUser(payload: {
   name?: string
   email: string
   fingerprintEvent: FingerprintEventDto
-}): Promise<{ user: UserDetails['user']; fingerprint_id: number; cookie_id: string }> {
+}): Promise<{ user: UserDetails['user'] }> {
   const response = await api.post('/auth/register', payload)
   return response.data
 }
@@ -51,7 +51,7 @@ export async function loginUser(payload: {
   userId?: number
   email?: string
   fingerprintEvent: FingerprintEventDto
-}): Promise<{ user: UserDetails['user']; fingerprint_id: number; cookie_id: string }> {
+}): Promise<{ user: UserDetails['user'] }> {
   const response = await api.post('/auth/login', payload)
   return response.data
 }
@@ -60,15 +60,13 @@ export async function activatePromo(payload: {
   userId: number
   promoCode: string
   fingerprintEvent: FingerprintEventDto
-}): Promise<{ user_id: number; promo_code: string; fingerprint_id: number; cookie_id: string }> {
+}): Promise<{ user_id: number; promo_code: string; success: boolean }> {
   const response = await api.post('/promos/activate', payload)
   return response.data
 }
 
 export async function resetDemoData(): Promise<{ success: boolean; message: string }> {
-  const response = await api.post<{ success: boolean; message: string }>(
-    '/admin/reset-demo-data',
-  )
+  const response = await api.post<{ success: boolean; message: string }>('/admin/reset-demo-data')
   return response.data
 }
 
@@ -88,9 +86,7 @@ export async function trackUserActivity(params: ActivityTrackParams): Promise<vo
   })
 }
 
-export async function withTrackedUserAction<T>(
-  params: TrackedActionParams<T>,
-): Promise<T> {
+export async function withTrackedUserAction<T>(params: TrackedActionParams<T>): Promise<T> {
   const result = await params.operation()
 
   void trackUserActivity({
