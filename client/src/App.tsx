@@ -27,7 +27,7 @@ function App() {
   const [relatedAccounts, setRelatedAccounts] = useState<RelatedAccount[]>([])
   const [loadingAnalytics, setLoadingAnalytics] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(false)
-  const [actionState, setActionState] = useState('РћР¶РёРґР°РЅРёРµ')
+  const [actionState, setActionState] = useState('Ожидание')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastCollectedData, setLastCollectedData] =
     useState<FingerprintCollectionResult | null>(null)
@@ -80,10 +80,7 @@ function App() {
         activityType: 'open_user_panel',
         activityTarget: String(userId),
         operation: async () =>
-          Promise.all([
-            fetchUserDetails(userId),
-            fetchRelatedAccounts(userId),
-          ]),
+          Promise.all([fetchUserDetails(userId), fetchRelatedAccounts(userId)]),
       })
 
       startTransition(() => {
@@ -115,19 +112,20 @@ function App() {
     const email = registerForm.email.trim()
 
     if (!isValidEmail(email)) {
-      setActionState('РџСЂРѕРІРµСЂРєР° С„РѕСЂРјС‹')
-      setErrorMessage('Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email Р°РґСЂРµСЃ')
+      setActionState('Проверка формы')
+      setErrorMessage('Введите корректный email адрес')
       return
     }
-    setActionState('РЎР±РѕСЂ РѕС‚РїРµС‡Р°С‚РєР° РґР»СЏ СЂРµРіРёСЃС‚СЂР°С†РёРё...')
+
+    setActionState('Сбор отпечатка для регистрации...')
 
     try {
       const collected = await loadFingerprintEvent('register')
       setLastCollectedData(collected)
       setActionState(
         collected.meta.formWasReset
-          ? 'Р¤РѕСЂРјР° Р±С‹Р»Р° РѕС‚РєСЂС‹С‚Р° СЃР»РёС€РєРѕРј РґРѕР»РіРѕ, С‚Р°Р№РјРµСЂ СЂРµРіРёСЃС‚СЂР°С†РёРё СЃР±СЂРѕС€РµРЅ'
-          : 'РћС‚РїСЂР°РІРєР° СЂРµРіРёСЃС‚СЂР°С†РёРё...',
+          ? 'Форма была открыта слишком долго, таймер регистрации сброшен'
+          : 'Отправка регистрации...',
       )
 
       const response = await registerUser({
@@ -151,10 +149,10 @@ function App() {
         provider: '',
         providerAccountId: '',
       })
-      setActionState(`РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ #${response.user.id} Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ`)
+      setActionState(`Пользователь #${response.user.id} зарегистрирован`)
       await refreshAnalytics(response.user.id)
     } catch (error) {
-      setActionState('РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё')
+      setActionState('Ошибка регистрации')
       setErrorMessage(extractErrorMessage(error))
     }
   }
@@ -165,16 +163,17 @@ function App() {
     const email = loginForm.email.trim()
 
     if (email && !isValidEmail(email)) {
-      setActionState('РџСЂРѕРІРµСЂРєР° С„РѕСЂРјС‹')
-      setErrorMessage('Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ email Р°РґСЂРµСЃ')
+      setActionState('Проверка формы')
+      setErrorMessage('Введите корректный email адрес')
       return
     }
-    setActionState('РЎР±РѕСЂ РѕС‚РїРµС‡Р°С‚РєР° РґР»СЏ РІС…РѕРґР°...')
+
+    setActionState('Сбор отпечатка для входа...')
 
     try {
       const collected = await loadFingerprintEvent('login')
       setLastCollectedData(collected)
-      setActionState('РћС‚РїСЂР°РІРєР° РІС…РѕРґР°...')
+      setActionState('Отправка входа...')
 
       const response = await loginUser({
         email: email || undefined,
@@ -182,10 +181,10 @@ function App() {
         fingerprintEvent: collected.event,
       })
 
-      setActionState(`РћС‚РїРµС‡Р°С‚РѕРє РІС…РѕРґР° Р·Р°РїРёСЃР°РЅ РґР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ #${response.user.id}`)
+      setActionState(`Отпечаток входа записан для пользователя #${response.user.id}`)
       await refreshAnalytics(response.user.id)
     } catch (error) {
-      setActionState('РћС€РёР±РєР° РІС…РѕРґР°')
+      setActionState('Ошибка входа')
       setErrorMessage(extractErrorMessage(error))
     }
   }
@@ -193,15 +192,12 @@ function App() {
   async function handlePromoSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage(null)
-    setActionState('РЎР±РѕСЂ РѕС‚РїРµС‡Р°С‚РєР° РґР»СЏ РїСЂРѕРјРѕРєРѕРґР°...')
+    setActionState('Сбор отпечатка для промокода...')
 
     try {
-      const collected = await loadFingerprintEvent(
-        'promo_activation',
-        promoForm.promoCode,
-      )
+      const collected = await loadFingerprintEvent('promo_activation', promoForm.promoCode)
       setLastCollectedData(collected)
-      setActionState('РћС‚РїСЂР°РІРєР° Р°РєС‚РёРІР°С†РёРё РїСЂРѕРјРѕРєРѕРґР°...')
+      setActionState('Отправка активации промокода...')
 
       const response = await activatePromo({
         userId: Number.parseInt(promoForm.userId, 10),
@@ -209,17 +205,17 @@ function App() {
         fingerprintEvent: collected.event,
       })
 
-      setActionState(`РџСЂРѕРјРѕРєРѕРґ Р°РєС‚РёРІРёСЂРѕРІР°РЅ РґР»СЏ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ #${response.user_id}`)
+      setActionState(`Промокод активирован для пользователя #${response.user_id}`)
       await refreshAnalytics(response.user_id)
     } catch (error) {
-      setActionState('РћС€РёР±РєР° Р°РєС‚РёРІР°С†РёРё РїСЂРѕРјРѕРєРѕРґР°')
+      setActionState('Ошибка активации промокода')
       setErrorMessage(extractErrorMessage(error))
     }
   }
 
   async function handleResetDatabase(): Promise<void> {
     setErrorMessage(null)
-    setActionState('РћС‡РёСЃС‚РєР° Р±Р°Р·С‹...')
+    setActionState('Очистка базы...')
 
     try {
       await resetDemoData()
@@ -228,67 +224,63 @@ function App() {
       setSelectedUserDetails(null)
       setRelatedAccounts([])
       setLastCollectedData(null)
-      setActionState('Р‘Р°Р·Р° РѕС‡РёС‰РµРЅР°')
+      setActionState('База очищена')
       await refreshAnalytics()
     } catch (error) {
-      setActionState('РћС€РёР±РєР° РѕС‡РёСЃС‚РєРё Р±Р°Р·С‹')
+      setActionState('Ошибка очистки базы')
       setErrorMessage(extractErrorMessage(error))
     }
   }
 
   return (
     <main className="app">
-      <h1>РђРЅС‚Рё-РјСѓР»СЊС‚РёР°РєРєР°СѓРЅС‚</h1>
-      <p className="subtitle">РўРѕР»СЊРєРѕ С„СѓРЅРєС†РёРѕРЅР°Р»СЊРЅС‹Р№ РёРЅС‚РµСЂС„РµР№СЃ РґР»СЏ РґРµРјРѕ Рё РїСЂРѕРІРµСЂРєРё СЃРІСЏР·РµР№.</p>
+      <h1>Анти-мультиаккаунт</h1>
+      <p className="subtitle">Только функциональный интерфейс для демо и проверки связей.</p>
 
       <section className="block">
-        <h2>РЎС‚Р°С‚СѓСЃ</h2>
-        <p>РўРµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ: {actionState}</p>
-        <p>РџРѕР»СЊР·РѕРІР°С‚РµР»РµР№ РІ СЃРёСЃС‚РµРјРµ: {analyticsUsers.length}</p>
-        <p>Р’С‹Р±СЂР°РЅРЅС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ: {selectedUserId ?? 'РЅРµ РІС‹Р±СЂР°РЅ'}</p>
+        <h2>Статус</h2>
+        <p>Текущее состояние: {actionState}</p>
+        <p>Пользователей в системе: {analyticsUsers.length}</p>
+        <p>Выбранный пользователь: {selectedUserId ?? 'не выбран'}</p>
         <button type="button" onClick={() => void handleResetDatabase()}>
-          РћС‡РёСЃС‚РёС‚СЊ Р±Р°Р·Сѓ РїРѕР»РЅРѕСЃС‚СЊСЋ
+          Очистить базу полностью
         </button>
-        {errorMessage ? <p className="error">РћС€РёР±РєР°: {errorMessage}</p> : null}
+        {errorMessage ? <p className="error">Ошибка: {errorMessage}</p> : null}
       </section>
 
       <section className="block">
-        <h2>РўРµРєСѓС‰РёРµ СЃРѕР±СЂР°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ</h2>
+        <h2>Текущие собранные данные</h2>
         {lastCollectedData ? (
           <>
-            <p>Р’СЂРµРјСЏ СЃР±РѕСЂР°: {new Date(lastCollectedData.meta.collectedAt).toLocaleString()}</p>
+            <p>Время сбора: {new Date(lastCollectedData.meta.collectedAt).toLocaleString()}</p>
             <p>
-              Р’СЂРµРјСЏ РѕС‚ Р·Р°РіСЂСѓР·РєРё РґРѕ РѕС‚РїСЂР°РІРєРё С„РѕСЂРјС‹:{' '}
-              {lastCollectedData.meta.registrationSpeedMs ?? 'РЅРµ РїСЂРёРјРµРЅСЏРµС‚СЃСЏ'} РјСЃ
+              Время от загрузки до отправки формы:{' '}
+              {lastCollectedData.meta.registrationSpeedMs ?? 'не применяется'} мс
             </p>
             <p>
-              Р¤РѕСЂРјР° СѓСЃС‚Р°СЂРµР»Р° Рё С‚Р°Р№РјРµСЂ Р±С‹Р» СЃР±СЂРѕС€РµРЅ:{' '}
-              {lastCollectedData.meta.formWasReset ? 'РґР°' : 'РЅРµС‚'}
+              Форма устарела и таймер был сброшен:{' '}
+              {lastCollectedData.meta.formWasReset ? 'да' : 'нет'}
             </p>
             <p>Canvas: {lastCollectedData.meta.diagnostics.canvas}</p>
             <p>Audio: {lastCollectedData.meta.diagnostics.audio}</p>
             <p>WebRTC: {lastCollectedData.meta.diagnostics.webrtc}</p>
             {lastCollectedData.meta.debug?.webrtc.length ? (
-              <pre className="debug-box">
-                {lastCollectedData.meta.debug.webrtc.join('\n')}
-              </pre>
+              <pre className="debug-box">{lastCollectedData.meta.debug.webrtc.join('\n')}</pre>
             ) : null}
-            <pre className="debug-box">
-              {JSON.stringify(lastCollectedData.event, null, 2)}
-            </pre>
+            <pre className="debug-box">{JSON.stringify(lastCollectedData.event, null, 2)}</pre>
           </>
         ) : (
-          <p>РџРѕРєР° РЅРёС‡РµРіРѕ РЅРµ СЃРѕР±СЂР°РЅРѕ. РћС‚РїСЂР°РІСЊС‚Рµ Р»СЋР±СѓСЋ С„РѕСЂРјСѓ.</p>
+          <p>Пока ничего не собрано. Отправьте любую форму.</p>
         )}
       </section>
 
       <section className="block">
-        <h2>Р”РµР№СЃС‚РІРёСЏ</h2>
+        <h2>Действия</h2>
         <div className="forms">
           <form onSubmit={handleRegisterSubmit} className="form">
-            <h3>Р РµРіРёСЃС‚СЂР°С†РёСЏ</h3>
+            <h3>Регистрация</h3>
             <input
-              placeholder="РРјСЏ"
+              placeholder="Имя"
               value={registerForm.name}
               onChange={(event) =>
                 setRegisterForm((current) => ({ ...current, name: event.target.value }))
@@ -304,17 +296,14 @@ function App() {
               }
             />
             <input
-              placeholder="РџСЂРѕРІР°Р№РґРµСЂ"
+              placeholder="Провайдер"
               value={registerForm.provider}
               onChange={(event) =>
-                setRegisterForm((current) => ({
-                  ...current,
-                  provider: event.target.value,
-                }))
+                setRegisterForm((current) => ({ ...current, provider: event.target.value }))
               }
             />
             <input
-              placeholder="ID Р°РєРєР°СѓРЅС‚Р° РїСЂРѕРІР°Р№РґРµСЂР°"
+              placeholder="ID аккаунта провайдера"
               value={registerForm.providerAccountId}
               onChange={(event) =>
                 setRegisterForm((current) => ({
@@ -323,11 +312,11 @@ function App() {
                 }))
               }
             />
-            <button type="submit">Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°С‚СЊ</button>
+            <button type="submit">Зарегистрировать</button>
           </form>
 
           <form onSubmit={handleLoginSubmit} className="form">
-            <h3>Р’С…РѕРґ</h3>
+            <h3>Вход</h3>
             <input
               type="email"
               placeholder="Email"
@@ -337,20 +326,20 @@ function App() {
               }
             />
             <input
-              placeholder="РёР»Рё ID РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ"
+              placeholder="или ID пользователя"
               value={loginForm.userId}
               onChange={(event) =>
                 setLoginForm((current) => ({ ...current, userId: event.target.value }))
               }
             />
-            <button type="submit">Р—Р°РїРёСЃР°С‚СЊ РІС…РѕРґ</button>
+            <button type="submit">Записать вход</button>
           </form>
 
           <form onSubmit={handlePromoSubmit} className="form">
-            <h3>РђРєС‚РёРІР°С†РёСЏ РїСЂРѕРјРѕРєРѕРґР°</h3>
+            <h3>Активация промокода</h3>
             <input
               required
-              placeholder="ID РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ"
+              placeholder="ID пользователя"
               value={promoForm.userId}
               onChange={(event) =>
                 setPromoForm((current) => ({ ...current, userId: event.target.value }))
@@ -358,22 +347,22 @@ function App() {
             />
             <input
               required
-              placeholder="РџСЂРѕРјРѕРєРѕРґ"
+              placeholder="Промокод"
               value={promoForm.promoCode}
               onChange={(event) =>
                 setPromoForm((current) => ({ ...current, promoCode: event.target.value }))
               }
             />
-            <button type="submit">РђРєС‚РёРІРёСЂРѕРІР°С‚СЊ</button>
+            <button type="submit">Активировать</button>
           </form>
         </div>
       </section>
 
       <section className="block">
         <div className="section-head">
-          <h2>РџРѕР»СЊР·РѕРІР°С‚РµР»Рё</h2>
+          <h2>Пользователи</h2>
           <button type="button" onClick={() => void refreshAnalytics(selectedUserId ?? undefined)}>
-            {loadingAnalytics ? 'РћР±РЅРѕРІР»РµРЅРёРµ...' : 'РћР±РЅРѕРІРёС‚СЊ'}
+            {loadingAnalytics ? 'Обновление...' : 'Обновить'}
           </button>
         </div>
 
@@ -382,9 +371,9 @@ function App() {
             <tr>
               <th>ID</th>
               <th>Email</th>
-              <th>РћС‚РїРµС‡Р°С‚РєРѕРІ</th>
-              <th>РЎРІСЏР·РµР№</th>
-              <th>РњР°РєСЃ. score</th>
+              <th>Отпечатков</th>
+              <th>Связей</th>
+              <th>Макс. score</th>
             </tr>
           </thead>
           <tbody>
@@ -403,7 +392,7 @@ function App() {
             ))}
             {analyticsUsers.length === 0 ? (
               <tr>
-                <td colSpan={5}>РџРѕРєР° РЅРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№.</td>
+                <td colSpan={5}>Пока нет пользователей.</td>
               </tr>
             ) : null}
           </tbody>
@@ -411,15 +400,15 @@ function App() {
       </section>
 
       <section className="block">
-        <h2>РЎРІСЏР·Р°РЅРЅС‹Рµ Р°РєРєР°СѓРЅС‚С‹</h2>
-        <p>{loadingDetails ? 'Р—Р°РіСЂСѓР·РєР°...' : `РќР°Р№РґРµРЅРѕ СЃРІСЏР·РµР№: ${relatedAccounts.length}`}</p>
+        <h2>Связанные аккаунты</h2>
+        <p>{loadingDetails ? 'Загрузка...' : `Найдено связей: ${relatedAccounts.length}`}</p>
         <table>
           <thead>
             <tr>
-              <th>ID СЃРІСЏР·Р°РЅРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ</th>
+              <th>ID связанного пользователя</th>
               <th>Score</th>
-              <th>РџСЂРёС‡РёРЅС‹</th>
-              <th>РЎРѕРІРїР°РІС€РёС… СЃРѕР±С‹С‚РёР№</th>
+              <th>Причины</th>
+              <th>Совпавших событий</th>
             </tr>
           </thead>
           <tbody>
@@ -433,7 +422,7 @@ function App() {
             ))}
             {selectedUserId && relatedAccounts.length === 0 ? (
               <tr>
-                <td colSpan={4}>Р”Р»СЏ РІС‹Р±Р°РЅРЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ СЃРІСЏР·РµР№ РЅРµ РЅР°Р№РґРµРЅРѕ.</td>
+                <td colSpan={4}>Для выбранного пользователя связей не найдено.</td>
               </tr>
             ) : null}
           </tbody>
@@ -441,32 +430,32 @@ function App() {
       </section>
 
       <section className="block">
-        <h2>РСЃС‚РѕСЂРёСЏ РѕС‚РїРµС‡Р°С‚РєРѕРІ</h2>
+        <h2>История отпечатков</h2>
         {selectedUserDetails ? (
           <>
             <p>
-              РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ: #{selectedUserDetails.user.id} {selectedUserDetails.user.email}
+              Пользователь: #{selectedUserDetails.user.id} {selectedUserDetails.user.email}
             </p>
             <p>
-              Р’РЅРµС€РЅРёРµ Р°РєРєР°СѓРЅС‚С‹:{' '}
+              Внешние аккаунты:{' '}
               {selectedUserDetails.authAccounts.length > 0
                 ? selectedUserDetails.authAccounts
                     .map((account) => `${account.provider}:${account.providerAccountId}`)
                     .join(', ')
-                : 'РЅРµС‚'}
+                : 'нет'}
             </p>
 
             <table>
               <thead>
                 <tr>
                   <th>ID</th>
-                  <th>РЎРѕР±С‹С‚РёРµ</th>
+                  <th>Событие</th>
                   <th>f_hash</th>
                   <th>IP</th>
                   <th>WebRTC</th>
                   <th>Cookie</th>
                   <th>Affiliate</th>
-                  <th>Р’СЂРµРјСЏ</th>
+                  <th>Время</th>
                 </tr>
               </thead>
               <tbody>
@@ -486,7 +475,7 @@ function App() {
             </table>
           </>
         ) : (
-          <p>Р’С‹Р±РµСЂРёС‚Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, С‡С‚РѕР±С‹ РїРѕСЃРјРѕС‚СЂРµС‚СЊ РµРіРѕ РёСЃС‚РѕСЂРёСЋ.</p>
+          <p>Выберите пользователя, чтобы посмотреть его историю.</p>
         )}
       </section>
     </main>
@@ -495,17 +484,14 @@ function App() {
 
 function extractErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
-    return (
-      (error.response?.data as { error?: string } | undefined)?.error ??
-      error.message
-    )
+    return ((error.response?.data as { error?: string } | undefined)?.error ?? error.message)
   }
 
   if (error instanceof Error) {
     return error.message
   }
 
-  return 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°'
+  return 'Неизвестная ошибка'
 }
 
 function isValidEmail(value: string): boolean {
